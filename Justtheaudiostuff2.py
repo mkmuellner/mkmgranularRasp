@@ -115,12 +115,12 @@ os.chdir(sourceFileDir)
 
 
 #read the wave file and give some stats about it
-Fs, data = read('Ashlight_Sample-29.wav') #read the wave file
+Fs, data = read('tori_amos_god_3.wav') #read the wave file
 
 ##initialize sound output via pygame
 channels = 12
 #pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
-pygame.mixer.pre_init(buffer = 2048*2, frequency = Fs, channels = channels) #lower buffer gives more clicks but more lag
+pygame.mixer.pre_init(buffer = 2048, frequency = Fs, channels = channels) #lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
 
@@ -141,9 +141,7 @@ print(f"length = {length}s")
 
 data = (data[:,0]) #only process the left channel
 
-#data = speed_up(data, 10) #larger number less uptuning
-#data = speed_down(data, 2) #larger number more downtuning
-#data = reverse(data)
+
 
 
 
@@ -182,10 +180,18 @@ data = (data[:,0]) #only process the left channel
 
 #t1 = round(time.time()*100)
 
+
+
+###global effects like pitch
+#data = speed_up(data, 10) #larger number less uptuning
+data = speed_down(data, 2) #larger number more downtuning
+data = reverse(data)
+
+
 grain_length_ms = 50.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
-playhead_speed = 250 # playhead movement in samples per second
+playhead_speed = 50 # playhead movement in samples per second
 playhead_jitter = 2 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
 soundloop_times = 0 #this repeats a given grain exactly after it is played for n times. 1 means repeated once.
@@ -198,13 +204,25 @@ currentgrain = 1 # which grain is currently supposed to be triggered
 playhead_position = 0 #position of the playhead in samples
 
 
+## the constant sample
+constant_sample = pygame.mixer.Sound('Ashlight_Sample-12.wav') #this needs to be a sample that endlessly loopable
+pygame.mixer.Channel(0).play(constant_sample, loops=-1)
+pygame.time.wait(10)
 
 while True: #run forever
     #begin_time = datetime.datetime.now()
-    print(".")
     dta = next_grain(data,playhead_position, playhead_jitter)
     grain1 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
+    pygame.time.wait(10)
+    dta = next_grain(data, playhead_position, playhead_jitter)
+    grain2 = pygame.mixer.Sound(play_ready(dta))
+    pygame.mixer.Sound.play(grain2, loops=soundloop_times)
+    pygame.time.wait(10)
+    dta = next_grain(data, playhead_position, playhead_jitter)
+    grain3 = pygame.mixer.Sound(play_ready(dta))
+    pygame.mixer.Sound.play(grain3, loops=soundloop_times)
+
 
     if not(playhead_reversed):
         playhead_position = playhead_position + playhead_speed
