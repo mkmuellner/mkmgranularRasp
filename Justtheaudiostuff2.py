@@ -115,7 +115,7 @@ os.chdir(sourceFileDir)
 
 
 #read the wave file and give some stats about it
-Fs, data = read('NI_Fairlight_Samples-12.wav') #read the wave file
+Fs, data = read('Ashlight_Sample-29.wav') #read the wave file
 
 ##initialize sound output via pygame
 channels = 12
@@ -123,7 +123,11 @@ channels = 12
 pygame.mixer.pre_init(buffer = 2048*2, frequency = Fs, channels = channels) #lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
+
+## apparently the below can also work
 #pygame.mixer.quit()
+#pygame.init(buffer = 2048*2, frequency = Fs, channels = channels)
+## commented out because it was not necessary at least on PC
 
 
 ###describe the wave file
@@ -178,11 +182,11 @@ data = (data[:,0]) #only process the left channel
 
 #t1 = round(time.time()*100)
 
-grain_length_ms = 150.0  #in milliseconds (global)
+grain_length_ms = 50.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
 playhead_speed = 250 # playhead movement in samples per second
-playhead_jitter = 1 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
+playhead_jitter = 2 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
 soundloop_times = 0 #this repeats a given grain exactly after it is played for n times. 1 means repeated once.
 
