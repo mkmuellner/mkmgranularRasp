@@ -204,10 +204,26 @@ currentgrain = 1 # which grain is currently supposed to be triggered
 playhead_position = 0 #position of the playhead in samples
 
 
-## the constant sample
-constant_sample = pygame.mixer.Sound('Ashlight_Sample-12.wav') #this needs to be a sample that endlessly loopable
-pygame.mixer.Channel(0).play(constant_sample, loops=-1)
-pygame.time.wait(10)
+## the constant sample (played as two channels to overlap a bit)
+constant_sample = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
+constant_sample.set_volume(0.2)
+pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
+pygame.time.wait(300)
+constant_sample2 = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
+constant_sample2.set_volume(0.2)
+pygame.mixer.Channel(1).play(constant_sample2, loops=-1, fade_ms=300)
+
+
+## initialize the three LFOs
+LFO1 = 0 #this stores the LFO value (ie the multiplier)
+LFO2 = 0
+LFO1_type = 1 #sine
+LFO2_type = 2 #sine
+LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
+LFO2_parameter1 = 0.1
+LFO1_parameter2 = 1.0 #for sine this will be amplitude factor (multiplier)
+LFO2_parameter2 = 1.0
+##
 
 while True: #run forever
     #begin_time = datetime.datetime.now()
