@@ -7,6 +7,7 @@ from scipy.io.wavfile import read, write
 import struct
 from guizero import App, Picture, Drawing
 import random
+import datetime
 
 def grain(rev=False, playhead_pos = 0, grainsize = 50):
     #rev: should the sample be reversed
@@ -47,20 +48,59 @@ def env_hann(dta):
 def reverse(dta): #reverses the sample data
     return(np.flip(dta))
 
-def play_int16(dta): # all actions needed to play dta (as int16)
+def play_ready(dta): # all actions needed to play dta (as int16)
     # copy left channel onto right channel
-    print(".")
+    global currentgrain
+    global grain_length_ms
+    global soundloop_times
+    #print(".")
     dta = env_hann(dta)
+    #print(dta)
     dta = np.vstack((dta, dta)).T  # duplicate processed channels to create a "pseudo stereo" one to play"
     dta = dta.astype('i2')  # convert data to 16 bit int format
     sounddata = dta.tobytes()  # convert to buffer (sound data)
-    grain = pygame.mixer.Sound(sounddata)
-    pygame.mixer.Sound.play(grain)
+    # doesn't actually seem to make much of a difference
+    # compared to just running a single call to pygame.Mixer.Sound.play with a single sound.
+    return(sounddata)
+    # if currentgrain == 1:
+    #     grain1 = pygame.mixer.Sound(sounddata)
+    #     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
+    #     pygame.time.wait(150)
+    #     currentgrain += 1
+    # elif currentgrain == 2:
+    #     grain2 = pygame.mixer.Sound(sounddata)
+    #     pygame.mixer.Sound.play(grain2, loops = soundloop_times)
+    #     currentgrain += 1
+    #     pygame.time.wait(150)
+    # elif currentgrain == 3:
+    #     grain3 = pygame.mixer.Sound(sounddata)
+    #     pygame.mixer.Sound.play(grain3, loops = soundloop_times)
+    #     currentgrain += 1
+    #     pygame.time.wait(150)
+    # elif currentgrain == 4:
+    #     grain4 = pygame.mixer.Sound(sounddata)
+    #     pygame.mixer.Sound.play(grain4, loops = soundloop_times)
+    #     currentgrain = 1
+    #     # pygame.time.wait(150)
+
+
+
+    # if not(pygame.mixer.Channel(0).get_busy):
+    #     #pygame.mixer.Channel(0).play(grain, maxtime = round(grain_length_ms))
+    #     pygame.mixer.Channel(0).play(grain)
+    # elif not(pygame.mixer.Channel(1).get_busy):
+    #     pygame.mixer.Channel(1).play(grain, maxtime=round(grain_length_ms))
+    # elif not(pygame.mixer.Channel(2).get_busy):
+    #     pygame.mixer.Channel(2).play(grain, maxtime=round(grain_length_ms))
+    # elif not(pygame.mixer.Channel(3).get_busy):
+    #     pygame.mixer.Channel(3).play(grain, maxtime=round(grain_length_ms))
+    # else:
+    #     pygame.mixer.Channel(0).stop()
 
 def next_grain(data,playhead_position, playhead_jitter): #extract the next grain from full sample "data".
     global grain_length_samples
     sample_length = len(data)
-    jitter = int(sample_length * 0.1 * random.randint(-1*playhead_jitter,playhead_jitter))
+    jitter = int(sample_length * 0.01 * playhead_jitter * 0.5-(random.random()))
     ex_position = playhead_position - jitter
     if ex_position < 0:
         ex_position = -1 * ex_position
@@ -75,12 +115,17 @@ os.chdir(sourceFileDir)
 
 
 #read the wave file and give some stats about it
-Fs, data = read('tori_amos_god_3.wav') #read the wave file
+Fs, data = read('NI_Fairlight_Samples-12.wav') #read the wave file
 
 ##initialize sound output via pygame
-channels = 2
-pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
+channels = 12
+#pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
+pygame.mixer.pre_init(buffer = 2048*2, frequency = Fs, channels = channels) #lower buffer gives more clicks but more lag
+pygame.init()
 pygame.mixer.init()
+#pygame.mixer.quit()
+
+
 ###describe the wave file
 ## make sure we transform stereo to mono here.
 print(f"Samplerate = {Fs}")
@@ -133,23 +178,30 @@ data = (data[:,0]) #only process the left channel
 
 #t1 = round(time.time()*100)
 
-grain_length_ms = 50.0  #in milliseconds (global)
+grain_length_ms = 150.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
-playhead_speed = 2000 # playhead movement in samples per second
-playhead_jitter = 2 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
+playhead_speed = 250 # playhead movement in samples per second
+playhead_jitter = 1 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
+soundloop_times = 0 #this repeats a given grain exactly after it is played for n times. 1 means repeated once.
 
 ## calculate additional information needed
 grain_length_samples = round(grain_length_ms * (int(Fs)/1000)) #grain length now in samples
 grain_samples = np.zeros(4) #contains the audio data
 grain_waittime_ms = 1000.0 / grains_per_second  # how long to wait after one grain is triggered
-currentgrain = 0 # which grain is currently supposed to be triggered
+currentgrain = 1 # which grain is currently supposed to be triggered
 playhead_position = 0 #position of the playhead in samples
 
+
+
 while True: #run forever
+    #begin_time = datetime.datetime.now()
+    print(".")
     dta = next_grain(data,playhead_position, playhead_jitter)
-    play_int16(dta)
+    grain1 = pygame.mixer.Sound(play_ready(dta))
+    pygame.mixer.Sound.play(grain1, loops = soundloop_times)
+
     if not(playhead_reversed):
         playhead_position = playhead_position + playhead_speed
     else:
@@ -164,11 +216,9 @@ while True: #run forever
         playhead_reversed = False
         print("playhead forward")
 
-    #print(str(playhead_position)+" "+str(len(data)))
-    #if(pygame.time.get_ticks() - )
-
-    time.sleep(0.2)
-    #time.sleep(grain_waittime_ms/1000)
+    pygame.time.wait(10)
+    #print(datetime.datetime.now() - begin_time)
+    #print(pygame.mixer.get_busy())
 
 #data = sbuffer[:,0] #keeps only channel 0
 
