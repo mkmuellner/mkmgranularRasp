@@ -8,6 +8,7 @@ import struct
 from guizero import App, Picture, Drawing
 import random
 import datetime
+import math
 
 def grain(rev=False, playhead_pos = 0, grainsize = 50):
     #rev: should the sample be reversed
@@ -109,6 +110,26 @@ def next_grain(data,playhead_position, playhead_jitter): #extract the next grain
     extracted = data[ex_position:(ex_position+grain_length_samples)]
     return(extracted)
 
+def updateLFO():
+    global LastLFOcall1
+    global LastLFOcall2
+    global LFO1
+    global LFO2
+    global LFO1_parameter1
+    global LFO2_parameter1
+    global LFO1_parameter2
+    global LFO2_parameter2
+    delta1 = (datetime.datetime.now() - LastLFOcall1)/1000 #the difference from last period to now
+    delta2 = (datetime.datetime.now() - LastLFOcall2) / 1000
+
+    #this doesn't work yet
+
+    #LFO1 = LFO1_parameter2* math.sin(LFO1_parameter1 * delta1)   #para1 is frequency para2 amplitude
+    #LFO2 = LFO2_parameter2 * math.sin(LFO2_parameter1 * delta2)
+    # if delta1 > 1/LFO1_parameter1:
+    #     LastLFOcall1 = datetime.datetime.now() #set a new timepoint when one full period is over.
+    # if delta2 > 1/LFO2_parameter1:
+    #     LastLFOcall2 = datetime.datetime.now()
 
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
@@ -183,10 +204,9 @@ data = (data[:,0]) #only process the left channel
 
 
 ###global effects like pitch
-#data = speed_up(data, 10) #larger number less uptuning
-data = speed_down(data, 2) #larger number more downtuning
+data = speed_up(data, 10) #larger number less uptuning
+#data = speed_down(data, 4) #larger number more downtuning
 data = reverse(data)
-
 
 grain_length_ms = 50.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
@@ -203,16 +223,14 @@ grain_waittime_ms = 1000.0 / grains_per_second  # how long to wait after one gra
 currentgrain = 1 # which grain is currently supposed to be triggered
 playhead_position = 0 #position of the playhead in samples
 
-
 ## the constant sample (played as two channels to overlap a bit)
 constant_sample = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
-constant_sample.set_volume(0.2)
+constant_sample.set_volume(0.05)
 pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 pygame.time.wait(300)
 constant_sample2 = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
-constant_sample2.set_volume(0.2)
+constant_sample2.set_volume(0.05)
 pygame.mixer.Channel(1).play(constant_sample2, loops=-1, fade_ms=300)
-
 
 ## initialize the three LFOs
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
@@ -225,7 +243,10 @@ LFO1_parameter2 = 1.0 #for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 1.0
 ##
 
+LastLFOcall1 = datetime.datetime.now()
+LastLFOcall2 = datetime.datetime.now()
 while True: #run forever
+    updateLFO()
     #begin_time = datetime.datetime.now()
     dta = next_grain(data,playhead_position, playhead_jitter)
     grain1 = pygame.mixer.Sound(play_ready(dta))
