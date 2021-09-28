@@ -119,24 +119,31 @@ def updateLFO():
     global LFO2_parameter1
     global LFO1_parameter2
     global LFO2_parameter2
-    delta1 = (datetime.datetime.now() - LastLFOcall1)/1000 #the difference from last period to now
-    delta2 = (datetime.datetime.now() - LastLFOcall2) / 1000
+    delta1 = (datetime.datetime.now() - LastLFOcall1) #the difference from last period to now
+    delta2 = (datetime.datetime.now() - LastLFOcall2)
+
+    delta1 = delta1.total_seconds()+0000.1
+    delta2 = delta2.total_seconds()+0000.1
 
     #this doesn't work yet
 
-    #LFO1 = LFO1_parameter2* math.sin(LFO1_parameter1 * delta1)   #para1 is frequency para2 amplitude
-    #LFO2 = LFO2_parameter2 * math.sin(LFO2_parameter1 * delta2)
-    # if delta1 > 1/LFO1_parameter1:
-    #     LastLFOcall1 = datetime.datetime.now() #set a new timepoint when one full period is over.
-    # if delta2 > 1/LFO2_parameter1:
-    #     LastLFOcall2 = datetime.datetime.now()
+    LFO1 = LFO1_parameter2* math.sin(delta1 * (2*math.pi/(1/LFO1_parameter1)))   #para1 is frequency para2 amplitude
+
+    print(f'LFO1 value: {LFO1}')
+
+    LFO2 = LFO2_parameter2 * math.sin(delta2 * (2*math.pi/(1/LFO2_parameter1)))
+
+    if delta1 > (1/LFO1_parameter1):
+        LastLFOcall1 = datetime.datetime.now() #set a new timepoint when one full period is over.
+    if delta2 > (1/LFO2_parameter1):
+        LastLFOcall2 = datetime.datetime.now()
 
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
 
 #read the wave file and give some stats about it
-Fs, data = read('tori_amos_god_3.wav') #read the wave file
+Fs, data = read('Ashlight_Sample-12.wav') #read the wave file
 
 ##initialize sound output via pygame
 channels = 12
@@ -206,7 +213,7 @@ data = (data[:,0]) #only process the left channel
 ###global effects like pitch
 data = speed_up(data, 10) #larger number less uptuning
 #data = speed_down(data, 4) #larger number more downtuning
-data = reverse(data)
+#data = reverse(data)
 
 grain_length_ms = 50.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
@@ -238,9 +245,9 @@ LFO2 = 0
 LFO1_type = 1 #sine
 LFO2_type = 2 #sine
 LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
-LFO2_parameter1 = 0.1
-LFO1_parameter2 = 1.0 #for sine this will be amplitude factor (multiplier)
-LFO2_parameter2 = 1.0
+LFO2_parameter1 = 0.2
+LFO1_parameter2 = 0.2 #for sine this will be amplitude factor (multiplier)
+LFO2_parameter2 = 0.3
 ##
 
 LastLFOcall1 = datetime.datetime.now()
@@ -249,14 +256,19 @@ while True: #run forever
     updateLFO()
     #begin_time = datetime.datetime.now()
     dta = next_grain(data,playhead_position, playhead_jitter)
+    dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
     grain1 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
     pygame.time.wait(10)
+
     dta = next_grain(data, playhead_position, playhead_jitter)
+    dta = speed_down(data, 12+round(LFO2*10))
     grain2 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain2, loops=soundloop_times)
     pygame.time.wait(10)
+
     dta = next_grain(data, playhead_position, playhead_jitter)
+    dta = speed_up(data, 12+round(LFO1*10))
     grain3 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain3, loops=soundloop_times)
 
