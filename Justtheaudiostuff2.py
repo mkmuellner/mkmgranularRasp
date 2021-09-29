@@ -43,27 +43,22 @@ def speed_down(dta, shift): #slows down the audio by just duplicating data. coul
     dta = (np.repeat(dta, 3)) #triple the datapoints
     return(np.delete(dta, np.arange(0, dta.size, shift))) #and now remove some again to get the pitch.
 
-def inverse(x):
-    y = 1/x
+def decfun(x):
+    y = 2**(-0.01*x)
     return y
 
 def env_hann(dta):
     return(dta*np.hanning(len(dta))) #this creates a hanning envelope. an array between 0 and 1.0
 
 def env_decay(dta):
-    q = np.empty(len(dta))
-    for i in range(len(dta)):
-        q = np.append(q, i)
-    q = inverse(q)
-    print(q)
-    print(dta*q)
+    q = np.arange(1,len(dta)+1)
+    q = decfun(q)
     return(dta*q) #this creates a hanning envelope. an array between 0 and 1.0
 
 def env_exp(dta):
-    q = np.empty(len(dta))
-    for i in range(len(dta)):
-        q = np.append(q,i)
-    q = inverse(q).flip()
+    q = np.arange(1, len(dta) + 1)
+    q = decfun(q)
+    q = np.flip(q)
     return(dta*q) #this creates a hanning envelope. an array between 0 and 1.0
 
 def reverse(dta): #reverses the sample data
@@ -83,7 +78,6 @@ def play_ready(dta, envtype): # all actions needed to play dta (as int16)
     elif envtype == 3:  # exp envelope
         dta = env_exp(dta)
 
-    #print(dta)
     dta = np.vstack((dta, dta)).T  # duplicate processed channels to create a "pseudo stereo" one to play"
     dta = dta.astype('i2')  # convert data to 16 bit int format
     sounddata = dta.tobytes()  # convert to buffer (sound data)
@@ -175,7 +169,7 @@ data = (data[:,0]) #only process the left channel
 #data = speed_down(data, 4) #larger number more downtuning
 #data = reverse(data)
 
-grain_length_ms = 90.0  #in milliseconds (global)
+grain_length_ms = 250.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
 playhead_speed = 50 # playhead movement in samples per second
@@ -183,7 +177,19 @@ playhead_jitter = 0.2 # jitter around the playhead as a factor. 1,0 = 10% of ful
 length_jitter = 0.1 #fold of original grain length
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
 soundloop_times = 0 #this repeats a given grain exactly after it is played for n times. 1 means repeated once.
+## initialize the three LFOs
+LFO1_type = 1 #sine
+LFO2_type = 2 #sine
+LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
+LFO2_parameter1 = 0.2
+LFO1_parameter2 = 0.2 #for sine this will be amplitude factor (multiplier)
+LFO2_parameter2 = 0.3
+envelopetype = 3
+##
 
+
+LFO1 = 0 #this stores the LFO value (ie the multiplier)
+LFO2 = 0
 ## calculate additional information needed
 grain_length_samples = round(grain_length_ms * (int(Fs)/1000)) #grain length now in samples
 grain_samples = np.zeros(4) #contains the audio data
@@ -203,16 +209,7 @@ if False: # currently deactivated
     constant_sample2.set_volume(0.05)
     pygame.mixer.Channel(1).play(constant_sample2, loops=-1, fade_ms=300)
 
-## initialize the three LFOs
-LFO1 = 0 #this stores the LFO value (ie the multiplier)
-LFO2 = 0
-LFO1_type = 1 #sine
-LFO2_type = 2 #sine
-LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
-LFO2_parameter1 = 0.2
-LFO1_parameter2 = 0.2 #for sine this will be amplitude factor (multiplier)
-LFO2_parameter2 = 0.3
-##
+
 
 LastLFOcall1 = datetime.datetime.now()
 LastLFOcall2 = datetime.datetime.now()
@@ -222,21 +219,21 @@ while True: #Grain generation
     updateLFO()
     #begin_time = datetime.datetime.now()
     dta = next_grain(data,playhead_position, playhead_jitter, length_jitter)
-    dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
+    #dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
     #dta = cube_softclip(dta, 1)
-    grain1 = pygame.mixer.Sound(play_ready(dta,2))
+    grain1 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
     pygame.time.wait(10)
 
     dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-    dta = speed_down(data, 12+round(LFO2*10))
-    grain2 = pygame.mixer.Sound(play_ready(dta,2))
+    #dta = speed_down(data, 12+round(LFO2*10))
+    grain2 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain2, loops=soundloop_times)
     pygame.time.wait(10)
 
     dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-    dta = speed_up(data, 12+round(LFO1*10))
-    grain3 = pygame.mixer.Sound(play_ready(dta,2))
+    #dta = speed_up(data, 12+round(LFO1*10))
+    grain3 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain3, loops=soundloop_times)
 
 
