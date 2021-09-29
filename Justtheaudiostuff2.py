@@ -138,7 +138,7 @@ def speedx(sound_array, factor): #PITCH SHIFT FUNCTION
 def stretch(sound_array, f, window_size, h): #Stretches the sound by a factor `f`
     phase  = np.zeros(window_size)
     hanning_window = np.hanning(window_size)
-    result = np.zeros( len(sound_array) /f + window_size)
+    result = np.zeros(int(len(sound_array) /f + window_size))
 
     for i in np.arange(0, len(sound_array)-(window_size+h), h*f):
 
@@ -150,11 +150,10 @@ def stretch(sound_array, f, window_size, h): #Stretches the sound by a factor `f
         s1 =  np.fft.fft(hanning_window * a1)
         s2 =  np.fft.fft(hanning_window * a2)
         phase = (phase + np.angle(s2/s1)) % 2*np.pi
-        a2_rephased = np.fft.ifft(np.abs(s2)*np.exp(1j*phase))
-
+        a2_rephased = np.fft.ifft(np.abs(s2)*np.exp(1j*phase)) #this gives a complex number
         # add to result
         i2 = int(i/f)
-        result[i2 : i2 + window_size] += hanning_window*a2_rephased
+        result[i2 : i2 + window_size] += hanning_window*a2_rephased.real
 
     result = ((2**(16-4)) * result/result.max()) # normalize (16bit)
 
@@ -284,21 +283,22 @@ changed = False #only process the audio once
 
 
 ### start the sample playback
+data_second = stretch(data_second, 10, 2**13, 2**11)
 constant_sample = pygame.mixer.Sound(play_ready(data_second,0)) #no envelope
 constant_sample.set_volume(0.05)
 pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
 while True:
     for msg in port.iter_pending():
-        if (msg.type == 'note_on') and not(changed):
-            data = speedx(data_backup, (msg.note-47)/13)  # larger number more downtuning
-            print((msg.note-48)/13)
-            changed = True
-        if msg.type == 'note_off':
-            changed = False
+        if (msg.type == 'note_on') and not(changed): #msg.note
+            print(data)
+            #data = pitchshift(data, n = 2)  # larger number more downtuning
 
-            data_second = speedx(data_backup_second, (msg.note-47)/13)
-            constant_sample = pygame.mixer.Sound(play_ready(data_second, 0))  # no envelope
+            changed = True
+        if msg.type == 'note_off': #change pitch of constant sound only at note off
+            changed = False
+            #data_second = pitchshift(constant_sample, n = 2)
+            constant_sample = pygame.mixer.Sound(play_ready(constant_sample, 0))  # no envelope
             constant_sample.set_volume(0.05)
             pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
