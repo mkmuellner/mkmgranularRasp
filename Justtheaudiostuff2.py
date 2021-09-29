@@ -191,6 +191,7 @@ sample2 = 'NI_Fairlight_Samples-34.wav'
 
 #read the wave file and give some stats about it
 Fs, data = read(sample1) #read the wave file
+Fs_second, data_second = read(sample2)
 
 ##initialize sound output via pygame
 channels = 12
@@ -214,6 +215,8 @@ print(f"length = {length}s")
 #print(Fs) #Fs contains the sample rate now
 
 data = (data[:,0]) #only process the left channel
+data_second = (data_second[:,0]) #only process the left channel
+
 
 # #plot the waveform
 # plt.figure()
@@ -226,7 +229,10 @@ data = (data[:,0]) #only process the left channel
 #data = speed_down(data, 4) #larger number more downtuning
 
 data_backup = data #back up the original data to be able to reset
+data_backup_second = data_second
+
 #data = reverse(data)
+
 
 grain_length_ms = 250.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
@@ -260,9 +266,7 @@ playhead_position = 0 #position of the playhead in samples
 
 ### SAMPLE PLAYER
 if False: # currently deactivated
-    constant_sample = pygame.mixer.Sound(sample2) #this needs to be a sample that endlessly loopable
-    constant_sample.set_volume(0.05)
-    pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
+
     pygame.time.wait(300)
     constant_sample2 = pygame.mixer.Sound(sample2) #this needs to be a sample that endlessly loopable
     constant_sample2.set_volume(0.05)
@@ -280,15 +284,27 @@ changed = False #only process the audio once
 
 
 ### start the sample playback
+constant_sample = pygame.mixer.Sound(play_ready(data_second,0)) #no envelope
+constant_sample.set_volume(0.05)
+pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
 while True:
     for msg in port.iter_pending():
         if (msg.type == 'note_on') and not(changed):
-            data = speedx(data, (msg.note-47)/13)  # larger number more downtuning
+            data = speedx(data_backup, (msg.note-47)/13)  # larger number more downtuning
             print((msg.note-48)/13)
             changed = True
         if msg.type == 'note_off':
             changed = False
+
+            data_second = speedx(data_backup_second, (msg.note-47)/13)
+            constant_sample = pygame.mixer.Sound(play_ready(data_second, 0))  # no envelope
+            constant_sample.set_volume(0.05)
+            pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
+
+        if msg.type == 'control_change':
+            print(msg.control)
+            print(msg.value)
     #data = speedx(data2, 3)  # larger number more downtuning
 
     #while True: #Grain generation
