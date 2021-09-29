@@ -130,11 +130,46 @@ def updateLFO():
     if delta2 > (1/LFO2_parameter1):
         LastLFOcall2 = datetime.datetime.now()
 
+def speedx(sound_array, factor): #PITCH SHIFT FUNCTION
+    indices = np.round( np.arange(0, len(sound_array), factor) )
+    indices = indices[indices < len(sound_array)].astype(int)
+    return sound_array[ indices.astype(int) ]
+
+def stretch(sound_array, f, window_size, h): #Stretches the sound by a factor `f`
+    phase  = np.zeros(window_size)
+    hanning_window = np.hanning(window_size)
+    result = np.zeros( len(sound_array) /f + window_size)
+
+    for i in np.arange(0, len(sound_array)-(window_size+h), h*f):
+
+        # two potentially overlapping subarrays
+        a1 = sound_array[i: i + window_size]
+        a2 = sound_array[i + h: i + window_size + h]
+
+        # resynchronize the second array on the first
+        s1 =  np.fft.fft(hanning_window * a1)
+        s2 =  np.fft.fft(hanning_window * a2)
+        phase = (phase + np.angle(s2/s1)) % 2*np.pi
+        a2_rephased = np.fft.ifft(np.abs(s2)*np.exp(1j*phase))
+
+        # add to result
+        i2 = int(i/f)
+        result[i2 : i2 + window_size] += hanning_window*a2_rephased
+
+    result = ((2**(16-4)) * result/result.max()) # normalize (16bit)
+
+    return result.astype('int16')
+
+def pitchshift(snd_array, n, window_size=2**13, h=2**11): #""" Changes the pitch of a sound by ``n`` semitones. """
+    factor = 2**(1.0 * n / 12.0)
+    stretched = stretch(snd_array, 1.0/factor, window_size, h)
+    return speedx(stretched[window_size:], factor)
+
 names = mido.get_input_names()
 print(names) #print the names of the input devices. the first one will be used.
-with mido.open_input(names[0]) as inport:
-    for msg in inport:
-        print(msg)
+# with mido.open_input(names[0]) as inport:
+#     for msg in inport:
+#         print(msg)
 
 # status	128 is a note on
 # 	144 is a note off
@@ -189,6 +224,8 @@ data = (data[:,0]) #only process the left channel
 ###global effects like pitch
 #data = speed_up(data, 10) #larger number less uptuning
 #data = speed_down(data, 4) #larger number more downtuning
+
+data_backup = data #back up the original data to be able to reset
 #data = reverse(data)
 
 grain_length_ms = 250.0  #in milliseconds (global)
@@ -236,8 +273,25 @@ if False: # currently deactivated
 LastLFOcall1 = datetime.datetime.now()
 LastLFOcall2 = datetime.datetime.now()
 
+#port = mido.open_input(names[0])
+port = mido.open_input('MPK Mini Mk II 0')
 
-while True: #Grain generation
+changed = False #only process the audio once
+
+
+### start the sample playback
+
+while True:
+    for msg in port.iter_pending():
+        if (msg.type == 'note_on') and not(changed):
+            data = speedx(data, (msg.note-47)/13)  # larger number more downtuning
+            print((msg.note-48)/13)
+            changed = True
+        if msg.type == 'note_off':
+            changed = False
+    #data = speedx(data2, 3)  # larger number more downtuning
+
+    #while True: #Grain generation
     updateLFO()
     #begin_time = datetime.datetime.now()
     dta = next_grain(data,playhead_position, playhead_jitter, length_jitter)
@@ -274,8 +328,8 @@ while True: #Grain generation
         print("playhead forward")
 
     pygame.time.wait(10)
-    #print(datetime.datetime.now() - begin_time)
-    #print(pygame.mixer.get_busy())
+#print(datetime.datetime.now() - begin_time)
+#print(pygame.mixer.get_busy())
 
 #data = sbuffer[:,0] #keeps only channel 0
 
