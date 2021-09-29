@@ -142,9 +142,11 @@ def updateLFO():
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
+sample1 = 'airplane engine start-old1.wav'
+sample2 = 'NI_Fairlight_Samples-34.wav'
 
 #read the wave file and give some stats about it
-Fs, data = read('tori_amos_god_3.wav') #read the wave file
+Fs, data = read(sample1) #read the wave file
 
 ##initialize sound output via pygame
 channels = 12
@@ -213,7 +215,7 @@ data = (data[:,0]) #only process the left channel
 
 ###global effects like pitch
 #data = speed_up(data, 10) #larger number less uptuning
-data = speed_down(data, 4) #larger number more downtuning
+#data = speed_down(data, 4) #larger number more downtuning
 #data = reverse(data)
 
 grain_length_ms = 150.0  #in milliseconds (global)
@@ -233,11 +235,11 @@ currentgrain = 1 # which grain is currently supposed to be triggered
 playhead_position = 0 #position of the playhead in samples
 
 ## the constant sample (played as two channels to overlap a bit)
-constant_sample = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
+constant_sample = pygame.mixer.Sound(sample2) #this needs to be a sample that endlessly loopable
 constant_sample.set_volume(0.05)
 pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 pygame.time.wait(300)
-constant_sample2 = pygame.mixer.Sound('NI_Fairlight_Samples-34.wav') #this needs to be a sample that endlessly loopable
+constant_sample2 = pygame.mixer.Sound(sample2) #this needs to be a sample that endlessly loopable
 constant_sample2.set_volume(0.05)
 pygame.mixer.Channel(1).play(constant_sample2, loops=-1, fade_ms=300)
 
