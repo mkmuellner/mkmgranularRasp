@@ -1,5 +1,6 @@
 import os
 import pygame
+import mido
 import time
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,7 +24,6 @@ def grain(rev=False, playhead_pos = 0, grainsize = 50):
 
     if(rev): #should the sample be reversed
         data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
-
 
 def GUI():
     app = App(width=800, height=400)
@@ -63,6 +63,10 @@ def env_exp(dta):
 
 def reverse(dta): #reverses the sample data
     return(np.flip(dta))
+
+def limiter(dta):
+    return(0)
+
 
 def play_ready(dta, envtype): # all actions needed to play dta (as int16)
     # copy left channel onto right channel
@@ -126,6 +130,24 @@ def updateLFO():
     if delta2 > (1/LFO2_parameter1):
         LastLFOcall2 = datetime.datetime.now()
 
+names = mido.get_input_names()
+print(names) #print the names of the input devices. the first one will be used.
+with mido.open_input(names[0]) as inport:
+    for msg in inport:
+        print(msg)
+
+# status	128 is a note on
+# 	144 is a note off
+# 	176 mod y (data2 gives the mod position, data1 = gives the x pos I think)
+# 	224 mod x (data2 gives the mod position, data1 = gives the y pos I think)
+# 	176 K1 (data2 gives value, data1 = 1)
+# 	176 K2 (data2 gives value, data1 = 2)
+# 	and so on. K7 data 1 = 7.
+#
+# data 1 = note
+# data 2 = velocity
+# timestamp = how long the note is held
+
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
@@ -184,7 +206,7 @@ LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
 LFO2_parameter1 = 0.2
 LFO1_parameter2 = 0.2 #for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 0.3
-envelopetype = 3
+envelopetype = 1
 ##
 
 
