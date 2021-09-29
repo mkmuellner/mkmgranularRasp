@@ -98,16 +98,17 @@ def play_ready(dta): # all actions needed to play dta (as int16)
     # else:
     #     pygame.mixer.Channel(0).stop()
 
-def next_grain(data,playhead_position, playhead_jitter): #extract the next grain from full sample "data".
+def next_grain(data,playhead_position, playhead_jitter, length_jitter): #extract the next grain from full sample "data".
     global grain_length_samples
     sample_length = len(data)
-    jitter = int(sample_length * 0.01 * playhead_jitter * 0.5-(random.random()))
+    jitter = int(sample_length * 0.01 * (playhead_jitter * (0.5-random.random())))
     ex_position = playhead_position - jitter
     if ex_position < 0:
         ex_position = -1 * ex_position
     if ex_position > (sample_length - grain_length_samples -1):
         ex_position = sample_length + (sample_length-ex_position)
-    extracted = data[ex_position:(ex_position+grain_length_samples)]
+    endposition = ex_position+grain_length_samples+round(grain_length_samples*length_jitter*(0.5-float(random.random())))
+    extracted = data[ex_position:endposition]
     return(extracted)
 
 def updateLFO():
@@ -129,7 +130,7 @@ def updateLFO():
 
     LFO1 = LFO1_parameter2* math.sin(delta1 * (2*math.pi/(1/LFO1_parameter1)))   #para1 is frequency para2 amplitude
 
-    print(f'LFO1 value: {LFO1}')
+    #print(f'LFO1 value: {LFO1}')
 
     LFO2 = LFO2_parameter2 * math.sin(delta2 * (2*math.pi/(1/LFO2_parameter1)))
 
@@ -143,7 +144,7 @@ os.chdir(sourceFileDir)
 
 
 #read the wave file and give some stats about it
-Fs, data = read('Ashlight_Sample-12.wav') #read the wave file
+Fs, data = read('tori_amos_god_3.wav') #read the wave file
 
 ##initialize sound output via pygame
 channels = 12
@@ -211,15 +212,16 @@ data = (data[:,0]) #only process the left channel
 
 
 ###global effects like pitch
-data = speed_up(data, 10) #larger number less uptuning
-#data = speed_down(data, 4) #larger number more downtuning
+#data = speed_up(data, 10) #larger number less uptuning
+data = speed_down(data, 4) #larger number more downtuning
 #data = reverse(data)
 
-grain_length_ms = 50.0  #in milliseconds (global)
+grain_length_ms = 150.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
 playhead_speed = 50 # playhead movement in samples per second
-playhead_jitter = 2 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
+playhead_jitter = 10 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
+length_jitter = 2 #fold of original grain length
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
 soundloop_times = 0 #this repeats a given grain exactly after it is played for n times. 1 means repeated once.
 
@@ -255,19 +257,20 @@ LastLFOcall2 = datetime.datetime.now()
 while True: #run forever
     updateLFO()
     #begin_time = datetime.datetime.now()
-    dta = next_grain(data,playhead_position, playhead_jitter)
+    dta = next_grain(data,playhead_position, playhead_jitter, length_jitter)
     dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
+    #dta = cube_softclip(dta, 1)
     grain1 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
     pygame.time.wait(10)
 
-    dta = next_grain(data, playhead_position, playhead_jitter)
+    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
     dta = speed_down(data, 12+round(LFO2*10))
     grain2 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain2, loops=soundloop_times)
     pygame.time.wait(10)
 
-    dta = next_grain(data, playhead_position, playhead_jitter)
+    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
     dta = speed_up(data, 12+round(LFO1*10))
     grain3 = pygame.mixer.Sound(play_ready(dta))
     pygame.mixer.Sound.play(grain3, loops=soundloop_times)
