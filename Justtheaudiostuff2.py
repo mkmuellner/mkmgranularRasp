@@ -6,10 +6,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io.wavfile import read, write
 import struct
-from guizero import App, Picture, Drawing
+from guizero import App, Picture, Drawing, Text
 import random
 import datetime
 import math
+#import tkinter as tk
+
 
 def grain(rev=False, playhead_pos = 0, grainsize = 50):
     #rev: should the sample be reversed
@@ -26,13 +28,41 @@ def grain(rev=False, playhead_pos = 0, grainsize = 50):
         data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
 
 def GUI():
-    app = App(width=800, height=400)
-    drawing = Drawing(app, width=800, height=400)
-    drawing.oval(30, 30, 60, 60, color="red")
-    drawing.oval(50, 50, 80, 80, color="red")
+    global Volume1
+    global Pitch1
+    global Tuning1
 
-    newd = Drawing(app, width=800, height=400)
-    newd.image(0,0,image = "GUI2.PNG")
+    app = App(width=800, height=400)
+    #drawing = Drawing(app, width=800, height=400)
+    #drawing.oval(30, 30, 60, 60, color="red")
+    #drawing.oval(50, 50, 80, 80, color="red")
+
+    newd = Drawing(app, width="fill", height="fill")
+    newd.image(0,0,image = "GUI_perform.png")
+
+    #left column granular
+    newd.text(145,127, Volume1)
+    newd.text(145, 127+26*1, Pitch1)
+    newd.text(145, 127+26*2-3, Tuning1)
+    newd.text(145, 127+26*3+18, round(grain_length_ms))
+    newd.text(145, 127+26*3+18+24, envelopetype)
+    newd.text(145, 127 + 26 * 3 + 18 + 24*2, playhead_speed)
+    newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times )
+    newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, pausetime1)
+
+    #left jitters
+    newd.text(145+100, 127, volume1_jitter)
+    newd.text(145+100, 127 + 26 * 1, pitch1_jitter)
+    newd.text(145+100, 127 + 26 * 3 + 18, length_jitter)
+    newd.text(145+100, 127 + 26 * 3 + 18 + 24 * 2, playhead_jitter)
+    newd.text(145+100, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
+
+    #LFO
+    newd.text(675, 75, LFO1_parameter1)
+    newd.text(675, 73+75, LFO2_parameter1)
+    newd.text(675, 70+75*2, LFO3_parameter1)
+    newd.text(675, 70-3+75*3, LFO4_parameter1)
+
     app.display()
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
@@ -164,6 +194,9 @@ def pitchshift(snd_array, n, window_size=2**13, h=2**11): #""" Changes the pitch
     stretched = stretch(snd_array, 1.0/factor, window_size, h)
     return speedx(stretched[window_size:], factor)
 
+
+
+
 names = mido.get_input_names()
 print(names) #print the names of the input devices. the first one will be used.
 # with mido.open_input(names[0]) as inport:
@@ -216,7 +249,6 @@ print(f"length = {length}s")
 data = (data[:,0]) #only process the left channel
 data_second = (data_second[:,0]) #only process the left channel
 
-
 # #plot the waveform
 # plt.figure()
 # plt.plot(data_s16)
@@ -232,7 +264,6 @@ data_backup_second = data_second
 
 #data = reverse(data)
 
-
 grain_length_ms = 250.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
@@ -246,11 +277,27 @@ LFO1_type = 1 #sine
 LFO2_type = 2 #sine
 LFO1_parameter1 = 0.1 #for sine this will be frequency in Hz
 LFO2_parameter1 = 0.2
+LFO3_parameter1 = 0.2
+LFO4_parameter1 = 0.2
 LFO1_parameter2 = 0.2 #for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 0.3
+LFO3_parameter2 = 0.3
+LFO4_parameter2 = 0.4
 envelopetype = 1
+Volume1 = 1.0
+Volume2 = 1.0
+Tuning1 = "C"
+Tuning2 = "C"
+Pitch1 = 1.0
+Pitch2 = 1.0
+pausetime1 = 10
+volume1_jitter = 0
+volume2_jitter = 0
+pitch1_jitter = 0
 ##
 
+
+GUI()
 
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
 LFO2 = 0
@@ -271,8 +318,6 @@ if False: # currently deactivated
     constant_sample2.set_volume(0.05)
     pygame.mixer.Channel(1).play(constant_sample2, loops=-1, fade_ms=300)
 
-
-
 LastLFOcall1 = datetime.datetime.now()
 LastLFOcall2 = datetime.datetime.now()
 
@@ -280,7 +325,6 @@ LastLFOcall2 = datetime.datetime.now()
 port = mido.open_input('MPK Mini Mk II 0')
 
 changed = False #only process the audio once
-
 
 ### start the sample playback
 data_second = stretch(data_second, 10, 2**13, 2**11)
@@ -292,7 +336,7 @@ while True:
     for msg in port.iter_pending():
         if (msg.type == 'note_on') and not(changed): #msg.note
             print(data)
-            #data = pitchshift(data, n = 2)  # larger number more downtuning
+            #data = speedx(data, msg.note)  # larger number more downtuning
 
             changed = True
         if msg.type == 'note_off': #change pitch of constant sound only at note off
@@ -311,23 +355,23 @@ while True:
     updateLFO()
     #begin_time = datetime.datetime.now()
     dta = next_grain(data,playhead_position, playhead_jitter, length_jitter)
+
     #dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
     #dta = cube_softclip(dta, 1)
     grain1 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain1, loops = soundloop_times)
-    pygame.time.wait(10)
+    pygame.time.wait(pausetime1)
 
     dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
     #dta = speed_down(data, 12+round(LFO2*10))
     grain2 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain2, loops=soundloop_times)
-    pygame.time.wait(10)
+    pygame.time.wait(pausetime1)
 
     dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
     #dta = speed_up(data, 12+round(LFO1*10))
     grain3 = pygame.mixer.Sound(play_ready(dta,envelopetype))
     pygame.mixer.Sound.play(grain3, loops=soundloop_times)
-
 
     if not(playhead_reversed):
         playhead_position = playhead_position + playhead_speed
@@ -343,13 +387,11 @@ while True:
         playhead_reversed = False
         print("playhead forward")
 
-    pygame.time.wait(10)
+    pygame.time.wait(pausetime1)
 #print(datetime.datetime.now() - begin_time)
 #print(pygame.mixer.get_busy())
 
 #data = sbuffer[:,0] #keeps only channel 0
-
-
 
 #0.836s actual sample time
 #48000Hz
@@ -360,10 +402,7 @@ while True:
 
 #print(round(time.time()*1000.0)-t)
 
-
 # Also make sure to include this to make sure it doesn't quit immediately
-
 
 #grainsize = 300 #in ms
 #fadetime = int(grainsize / 2)
-
