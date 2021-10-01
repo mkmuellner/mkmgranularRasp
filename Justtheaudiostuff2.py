@@ -63,6 +63,15 @@ def GUI():
     newd.text(675, 70+75*2, LFO3_parameter1)
     newd.text(675, 70-3+75*3, LFO4_parameter1)
 
+    #flip on
+    #newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
+    newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+
+    #picture is 302 x 74 at position 318, 30
+    newd.image(4, 30, image="AudioA.png")  # then flip it to off if needed.
+
+    #text.repeat(1, counter) # this will be the "work loop"
+
     app.display()
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
