@@ -31,7 +31,7 @@ def GUI():
     global Volume1
     global Pitch1
     global Tuning1
-
+    global data_s16
     app = App(width=800, height=400)
     #drawing = Drawing(app, width=800, height=400)
     #drawing.oval(30, 30, 60, 60, color="red")
@@ -68,6 +68,14 @@ def GUI():
     newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
 
     #picture is 302 x 74 at position 318, 30
+    #draws a picture of the waveform
+    if newsample:
+        my_monitors_dpi = 96
+        plt.figure(figsize=(370/my_monitors_dpi, 74/my_monitors_dpi),dpi = my_monitors_dpi) #need to change DPI value here for the small monitor
+        plt.axis('off')
+        plt.xlim([0, len(data)])
+        plt.plot(data, color = "black")
+        plt.savefig(fname = "AudioA.png", bbox_inches='tight', transparent=True) #
     newd.image(4, 30, image="AudioA.png")  # then flip it to off if needed.
 
     #text.repeat(1, counter) # this will be the "work loop"
@@ -304,6 +312,7 @@ volume1_jitter = 0
 volume2_jitter = 0
 pitch1_jitter = 0
 ##
+newsample = True #just for testing the drawing of the wavefile
 
 
 GUI()
