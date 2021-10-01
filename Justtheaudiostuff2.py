@@ -78,7 +78,8 @@ def GUI():
         plt.savefig(fname = "AudioA.png", bbox_inches='tight', transparent=True) #
     newd.image(4, 30, image="AudioA.png")  # then flip it to off if needed.
 
-    #text.repeat(1, counter) # this will be the "work loop"
+    dummy = Text(app, "") #not sure this dummy procedure is really needed
+    dummy.repeat(10, mainfunc)  # this will be the "work loop"
 
     app.display()
 
@@ -211,7 +212,77 @@ def pitchshift(snd_array, n, window_size=2**13, h=2**11): #""" Changes the pitch
     stretched = stretch(snd_array, 1.0/factor, window_size, h)
     return speedx(stretched[window_size:], factor)
 
+def mainfunc():
+    global dta
+    global grain1
+    global grain2
+    global grain3
+    global playhead_position
+    global changed
+    global playhead_reversed
+    global names
+    global sample1
+    global sample2
+    global data
+    global data_second
+    global channels
 
+
+    for msg in port.iter_pending():
+        if (msg.type == 'note_on') and not (changed):  # msg.note
+            print(data)
+            # data = speedx(data, msg.note)  # larger number more downtuning
+
+            changed = True
+        if msg.type == 'note_off':  # change pitch of constant sound only at note off
+            changed = False
+            # data_second = pitchshift(constant_sample, n = 2)
+            constant_sample = pygame.mixer.Sound(play_ready(constant_sample, 0))  # no envelope
+            constant_sample.set_volume(0.05)
+            pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
+
+        if msg.type == 'control_change':
+            print(msg.control)
+            print(msg.value)
+    # data = speedx(data2, 3)  # larger number more downtuning
+
+    # while True: #Grain generation
+    updateLFO()
+    # begin_time = datetime.datetime.now()
+    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+
+    # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
+    # dta = cube_softclip(dta, 1)
+    grain1 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+    pygame.mixer.Sound.play(grain1, loops=soundloop_times)
+    pygame.time.wait(pausetime1)
+
+    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+    # dta = speed_down(data, 12+round(LFO2*10))
+    grain2 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+    pygame.mixer.Sound.play(grain2, loops=soundloop_times)
+    pygame.time.wait(pausetime1)
+
+    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+    # dta = speed_up(data, 12+round(LFO1*10))
+    grain3 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+    pygame.mixer.Sound.play(grain3, loops=soundloop_times)
+
+    if not (playhead_reversed):
+        playhead_position = playhead_position + playhead_speed
+    else:
+        playhead_position = playhead_position - playhead_speed
+
+    if playhead_position > len(data):
+        playhead_position = len(data) - grain_length_samples
+        playhead_reversed = True
+        print("playhead reverse")
+    if playhead_position < 1:
+        playhead_position = grain_length_samples
+        playhead_reversed = False
+        print("playhead forward")
+
+    #pygame.time.wait(pausetime1)
 
 
 names = mido.get_input_names()
@@ -314,9 +385,6 @@ pitch1_jitter = 0
 ##
 newsample = True #just for testing the drawing of the wavefile
 
-
-GUI()
-
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
 LFO2 = 0
 ## calculate additional information needed
@@ -350,77 +418,4 @@ constant_sample = pygame.mixer.Sound(play_ready(data_second,0)) #no envelope
 constant_sample.set_volume(0.05)
 pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
-while True:
-    for msg in port.iter_pending():
-        if (msg.type == 'note_on') and not(changed): #msg.note
-            print(data)
-            #data = speedx(data, msg.note)  # larger number more downtuning
-
-            changed = True
-        if msg.type == 'note_off': #change pitch of constant sound only at note off
-            changed = False
-            #data_second = pitchshift(constant_sample, n = 2)
-            constant_sample = pygame.mixer.Sound(play_ready(constant_sample, 0))  # no envelope
-            constant_sample.set_volume(0.05)
-            pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
-
-        if msg.type == 'control_change':
-            print(msg.control)
-            print(msg.value)
-    #data = speedx(data2, 3)  # larger number more downtuning
-
-    #while True: #Grain generation
-    updateLFO()
-    #begin_time = datetime.datetime.now()
-    dta = next_grain(data,playhead_position, playhead_jitter, length_jitter)
-
-    #dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
-    #dta = cube_softclip(dta, 1)
-    grain1 = pygame.mixer.Sound(play_ready(dta,envelopetype))
-    pygame.mixer.Sound.play(grain1, loops = soundloop_times)
-    pygame.time.wait(pausetime1)
-
-    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-    #dta = speed_down(data, 12+round(LFO2*10))
-    grain2 = pygame.mixer.Sound(play_ready(dta,envelopetype))
-    pygame.mixer.Sound.play(grain2, loops=soundloop_times)
-    pygame.time.wait(pausetime1)
-
-    dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-    #dta = speed_up(data, 12+round(LFO1*10))
-    grain3 = pygame.mixer.Sound(play_ready(dta,envelopetype))
-    pygame.mixer.Sound.play(grain3, loops=soundloop_times)
-
-    if not(playhead_reversed):
-        playhead_position = playhead_position + playhead_speed
-    else:
-        playhead_position = playhead_position - playhead_speed
-
-    if playhead_position > len(data):
-        playhead_position = len(data)-grain_length_samples
-        playhead_reversed = True
-        print("playhead reverse")
-    if playhead_position < 1:
-        playhead_position = grain_length_samples
-        playhead_reversed = False
-        print("playhead forward")
-
-    pygame.time.wait(pausetime1)
-#print(datetime.datetime.now() - begin_time)
-#print(pygame.mixer.get_busy())
-
-#data = sbuffer[:,0] #keeps only channel 0
-
-#0.836s actual sample time
-#48000Hz
-#16 bit float
-
-#t2 = round(time.time()*100)
-#print(str((t2-t1)/100)+"s")
-
-#print(round(time.time()*1000.0)-t)
-
-# Also make sure to include this to make sure it doesn't quit immediately
-
-#grainsize = 300 #in ms
-#fadetime = int(grainsize / 2)
+GUI()
