@@ -222,6 +222,7 @@ def mainfunc():
     global channels
     global im1
     global selector
+    global LFO1_parameter1
 
 
 
@@ -239,11 +240,20 @@ def mainfunc():
         im1 = "GUI_perform_480_A_grainloops.png"
     elif selector == 9:
         im1 = "GUI_perform_480_A_pausetime.png"
-
+    elif selector == 10:
+        im1 = "GUI_perform_480_B_Soundfile.png"
+    elif selector == 11:
+        im1 = "GUI_perform_480_LFO1.png"
+    elif selector == 12:
+        im1 = "GUI_perform_480_LFO2.png"
+    elif selector == 13:
+        im1 = "GUI_perform_480_LFO3.png"
+    elif selector == 14:
+        im1 = "GUI_perform_480_LFO4.png"
 
     if LFO1<=0.1:
         selector +=1
-    if selector > 9:
+    if selector > 14:
         selector = 0
 
 
