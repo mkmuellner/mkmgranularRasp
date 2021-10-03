@@ -34,6 +34,7 @@ def GUI():
     global data_s16
     global LFO1 #only for debugging
     global im1
+    global playhead_position
 
     newd.image(0,0,image = im1)
 
@@ -76,6 +77,11 @@ def GUI():
         plt.close()
 
     newd.image(4, 30, image="AudioA.png")  # then flip it to off if needed.
+
+    #playhead position
+    xposA = 302/len(data) * playhead_position+10
+    newd.line(xposA,40,xposA,90, color = "red")
+
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
     return(np.delete(dta, np.arange(0, dta.size, shift)))
@@ -384,7 +390,7 @@ data_backup_second = data_second
 grain_length_ms = 250.0  #in milliseconds (global)
 grains_per_second = 4.0 # how many grains are triggered per second
 number_of_grains = 4 # how many grain channels are there (for pygame)
-playhead_speed = 50 # playhead movement in samples per second
+playhead_speed = 500 # playhead movement in samples per second
 playhead_jitter = 0.2 # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 length_jitter = 0.1 #fold of original grain length
 playhead_reversed = False # initial direction the playhead takes to trigger the samples.
@@ -452,7 +458,7 @@ app = App(width=800, height=480, bg="gray50")
 # app.set_full_screen()
 newd = Drawing(app, width="fill", height="fill")
 dummy = Text(app, "")  # not sure this dummy procedure is really needed
-dummy.repeat(300, GUI) #update the GUI every 300ms
+dummy.repeat(500, GUI) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 
 app.display()
