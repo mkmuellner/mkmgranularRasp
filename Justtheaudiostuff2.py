@@ -32,13 +32,10 @@ def GUI():
     global Pitch1
     global Tuning1
     global data_s16
-    app = App(width=800, height=400)
-    #drawing = Drawing(app, width=800, height=400)
-    #drawing.oval(30, 30, 60, 60, color="red")
-    #drawing.oval(50, 50, 80, 80, color="red")
+    global LFO1 #only for debugging
+    global im1
 
-    newd = Drawing(app, width="fill", height="fill")
-    newd.image(0,0,image = "GUI_perform.png")
+    newd.image(0,0,image = im1)
 
     #left column granular
     newd.text(145,127, Volume1)
@@ -76,12 +73,9 @@ def GUI():
         plt.xlim([0, len(data)])
         plt.plot(data, color = "black")
         plt.savefig(fname = "AudioA.png", bbox_inches='tight', transparent=True) #
+        plt.close()
+
     newd.image(4, 30, image="AudioA.png")  # then flip it to off if needed.
-
-    dummy = Text(app, "") #not sure this dummy procedure is really needed
-    dummy.repeat(10, mainfunc)  # this will be the "work loop"
-
-    app.display()
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
     return(np.delete(dta, np.arange(0, dta.size, shift)))
@@ -226,6 +220,31 @@ def mainfunc():
     global data
     global data_second
     global channels
+    global im1
+    global selector
+
+
+
+    if selector==0: im1 = "GUI_perform_480.png"
+    elif selector==1: im1 = "GUI_perform_480_A_Soundfile.png"
+    elif selector==2: im1 = "GUI_perform_480_A_volume.png"
+    elif selector==3: im1 = "GUI_perform_480_A_pitch.png"
+    elif selector==4: im1 = "GUI_perform_480_A_Tuning.png"
+    elif selector==5: im1 = "GUI_perform_480_A_grainsize.png"
+    elif selector == 6:
+        im1 = "GUI_perform_480_A_envtype.png"
+    elif selector == 7:
+        im1 = "GUI_perform_480_A_playspeed.png"
+    elif selector == 8:
+        im1 = "GUI_perform_480_A_grainloops.png"
+    elif selector == 9:
+        im1 = "GUI_perform_480_A_pausetime.png"
+
+
+    if LFO1<=0.1:
+        selector +=1
+    if selector > 9:
+        selector = 0
 
 
     for msg in port.iter_pending():
@@ -284,8 +303,8 @@ def mainfunc():
 
     #pygame.time.wait(pausetime1)
 
-
 names = mido.get_input_names()
+im1 = "GUI_perform_480.png"
 print(names) #print the names of the input devices. the first one will be used.
 # with mido.open_input(names[0]) as inport:
 #     for msg in inport:
@@ -384,6 +403,7 @@ volume2_jitter = 0
 pitch1_jitter = 0
 ##
 newsample = True #just for testing the drawing of the wavefile
+selector = 0 # this sets which part of the GUI is highlighted.
 
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
 LFO2 = 0
@@ -407,8 +427,8 @@ if False: # currently deactivated
 LastLFOcall1 = datetime.datetime.now()
 LastLFOcall2 = datetime.datetime.now()
 
-#port = mido.open_input(names[0])
-port = mido.open_input('MPK Mini Mk II 0')
+port = mido.open_input(names[0])
+#port = mido.open_input('MPK Mini Mk II 0')
 
 changed = False #only process the audio once
 
@@ -418,4 +438,11 @@ constant_sample = pygame.mixer.Sound(play_ready(data_second,0)) #no envelope
 constant_sample.set_volume(0.05)
 pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
-GUI()
+app = App(width=800, height=480, bg="gray50")
+# app.set_full_screen()
+newd = Drawing(app, width="fill", height="fill")
+dummy = Text(app, "")  # not sure this dummy procedure is really needed
+dummy.repeat(300, GUI) #update the GUI every 300ms
+dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
+
+app.display()
