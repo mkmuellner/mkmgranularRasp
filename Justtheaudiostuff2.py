@@ -368,7 +368,7 @@ print(names) #print the names of the input devices. the first one will be used.
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
-sample1 = 'airplane engine start-old1.wav'
+sample1 = 'NI_Grains-31.wav'
 sample2 = 'NI_Fairlight_Samples-34.wav'
 
 #read the wave file and give some stats about it
