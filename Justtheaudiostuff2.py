@@ -103,11 +103,11 @@ def filebrowser():
         fbrowser.text(30+5, 30 + q*17, i)
         q += 1
 
-    for i in filelist[22:43]:
+    for i in filelist[22:43]: ##44 elements can be displayed on one screen.
         fbrowser.text(20+5+380, 30 + (q-21)*17, i)
         q += 1
-
-    fbrowser.rectangle(15, 15+17*filebrowser_selected, 15+17, 15+17+17*filebrowser_selected, color="red")
+    filebrowser_selected = 5
+    fbrowser.rectangle(15, 19+15+17*filebrowser_selected, 15+17, 19+15+17+17*filebrowser_selected, color="red")
 
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
