@@ -1,4 +1,5 @@
 import os
+from os import walk
 import pygame
 import mido
 import time
@@ -81,6 +82,32 @@ def GUI():
     #playhead position
     xposA = 302/len(data) * playhead_position+10
     newd.line(xposA,40,xposA,90, color = "red")
+
+def filebrowser():
+    global filebrowser_selected
+    newd.hide()
+    fbrowser = Drawing(app, width="800", height="480")
+    fbrowser.rectangle(10,10,370,400, color = "white")
+    fbrowser.rectangle(380, 10, 790, 400, color="white")
+    filelist = os.listdir()
+    indices = [i for i, x in enumerate(filelist) if ".wav" in x] #return only wav files
+    element = []
+    for index in indices:
+        element.append(filelist[index])
+
+    filelist = element
+    q = 0
+    #might want to shorten file names in the middle if longer than x
+
+    for i in filelist[0:21]:
+        fbrowser.text(30+5, 30 + q*17, i)
+        q += 1
+
+    for i in filelist[22:43]:
+        fbrowser.text(20+5+380, 30 + (q-21)*17, i)
+        q += 1
+
+    fbrowser.rectangle(15, 15+17*filebrowser_selected, 15+17, 15+17+17*filebrowser_selected, color="red")
 
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
@@ -420,6 +447,7 @@ pitch1_jitter = 0
 ##
 newsample = True #just for testing the drawing of the wavefile
 selector = 0 # this sets which part of the GUI is highlighted.
+filebrowser_selected = 4 # which file is selected
 
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
 LFO2 = 0
@@ -460,5 +488,6 @@ newd = Drawing(app, width="fill", height="fill")
 dummy = Text(app, "")  # not sure this dummy procedure is really needed
 dummy.repeat(500, GUI) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
+dummy.repeat(4500, filebrowser) #update the GUI every 300ms
 
 app.display()
