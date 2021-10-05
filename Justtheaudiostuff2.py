@@ -1,4 +1,8 @@
+## this is the raspberry specific version
 import os
+import sys
+import signal
+import RPi.GPIO as GPIO #activate the GPIO pins for the rotary encoders
 from os import walk
 import pygame
 import mido
@@ -13,6 +17,25 @@ import datetime
 import math
 #import tkinter as tk
 
+GPIObuffer = []
+
+def signal_handler(sig, frame): #needed for the interrupt. cleans GPIO when program is canceled
+    GPIO.cleanup()
+    sys.exit(0)
+
+def button_pressed_callback(channel): #interrupt called
+    global oneA_Last
+    global oneB_Last
+    global GPIObuffer
+    
+    oneA_Last = GPIO.input(Enc_oneA)
+    oneB_Last = GPIO.input(Enc_oneB)
+    
+    if oneA_Last != oneB_Last:
+        print(f"GPIOBUFFER!{GPIObuffer}")
+        GPIObuffer = np.append(GPIObuffer, oneA_Last)
+        GPIObuffer = np.append(GPIObuffer, oneB_Last)
+        GPIObuffer = np.append(GPIObuffer, -1)
 
 def grain(rev=False, playhead_pos = 0, grainsize = 50):
     #rev: should the sample be reversed
@@ -29,7 +52,17 @@ def grain(rev=False, playhead_pos = 0, grainsize = 50):
         data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
 
 def GUI():
+    global selector
     if not(filebrowsing):
+
+        
+        # use rotary one to select stuff
+        selected = counter_one
+        if counter_one > 14:
+            selector = 14
+        if counter_one < 0:
+            selector = 0
+        
         global Volume1
         global Pitch1
         global Tuning1
@@ -86,6 +119,7 @@ def GUI():
 
 def filebrowser():
     if filebrowsing:
+
         global filebrowser_selected
         newd.hide()
         fbrowser = Drawing(app, width="800", height="480")
@@ -287,11 +321,6 @@ def mainfunc():
         elif selector == 14:
             im1 = "GUI_perform_480_LFO4.png"
 
-        if LFO1<=0.1:
-            selector +=1
-        if selector > 14:
-            selector = 0
-
 
         for msg in port.iter_pending():
             if (msg.type == 'note_on') and not (changed):  # msg.note
@@ -348,6 +377,142 @@ def mainfunc():
             print("playhead forward")
 
         #pygame.time.wait(pausetime1)
+def update_rotaries(): #updates the rotary encoder info from GPIO
+        global oneA_Last
+        global oneB_Last
+        global twoA_Last
+        global threeA_Last
+        global fourA_Last
+        
+        global counter_one
+        global counter_two
+        global counter_three
+        global counter_four
+        
+#         if oneA_Last != -1 :
+#             print("---")
+#             print(f"EncA:{oneA_Last}")
+#             print(f"EncB:{oneB_Last}")
+#             oneA_Last = -1
+#             oneB_Last = -1
+        #oneA_State = GPIO.input(Enc_oneA)
+        #oneB_State = GPIO.input(Enc_oneB)
+        
+#         twoA_State = GPIO.input(Enc_twoA)
+#         twoB_State = GPIO.input(Enc_twoB)
+#         
+#         threeA_State = GPIO.input(Enc_threeA)
+#         threeB_State = GPIO.input(Enc_threeB)
+#         
+#         fourA_State = GPIO.input(Enc_fourA)
+#         fourB_State = GPIO.input(Enc_fourB)
+# 
+#         #print(f"----{datetime.datetime.now()}")
+#         #print(oneA_State)
+#         #print(oneB_State)
+#         #print(counter_one)
+# 
+#         if oneA_State != oneA_Last:
+#             if oneB_State != oneA_State:
+#                 if int(counter_one/2) < 24:
+#                     counter_one += 1
+#             else:
+#                 if int(counter_one/2) > 0:
+#                     counter_one -= 1
+#             
+#             
+# 
+#                     
+#         oneA_Last = oneA_State
+#         
+#         if twoA_State != twoA_Last:
+#             if twoB_State != twoA_State:
+#                 counter_two += 1
+#             else:
+#                 counter_two -= 1
+#             
+#         twoA_Last = twoA_State
+# 
+#         if threeA_State != threeA_Last:
+#             if threeB_State != threeA_State:
+#                 counter_three += 1
+#             else:
+#                 counter_three -= 1
+#             
+#         threeA_Last = threeA_State
+#         
+#         if fourA_State != fourA_Last:
+#             if fourB_State != fourA_State:
+#                 counter_four += 1
+#             else:
+#                 counter_four -= 1
+#             
+#         fourA_Last = fourA_State        
+
+def grain(rev=False, playhead_pos = 0, grainsize = 50):
+    #rev: should the sample be reversed
+    #playhead_pos: position of the playhead in the sample in fraction. 1 = end of file
+    #grainsize: size of the grain in milliseconds
+
+    global data_s16
+    global Fs #the sampling rate
+    global channels #mono (1) or stereo (2)
+
+    grainsmp = data_s16[playhead_pos*len()]
+
+
+    if(rev): #should the sample be reversed
+        data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
+
+
+## GPIO configuration for rotary encoders.
+GPIO.setmode(GPIO.BCM)
+
+Enc_oneA = 16
+Enc_oneB = 20
+Enc_oneSW = 21
+
+Enc_twoA = 9
+Enc_twoB = 10
+Enc_twoSW = 11
+
+Enc_threeA = 27
+Enc_threeB = 17
+Enc_threeSW = 22
+
+Enc_fourA = 2
+Enc_fourB = 3
+Enc_fourSW = 4
+
+oneA_Last = -1
+oneB_Last = -1
+
+for pin in [16,20,21,10,9,11,17,27,22,2,3,4]: #initialize the pins we use
+    GPIO.setup(pin ,GPIO.IN)
+
+#initialize the counters
+
+counter_one = 0
+counter_two = 0
+counter_three = 0
+counter_four = 0
+
+#oneA_Last = GPIO.input(Enc_oneA) # previous state of the encoder
+twoA_Last = GPIO.input(Enc_twoA)
+threeA_Last = GPIO.input(Enc_threeA)
+fourA_Last = GPIO.input(Enc_fourA)
+
+GPIO.add_event_detect(Enc_oneA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+GPIO.add_event_detect(Enc_twoA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+GPIO.add_event_detect(Enc_threeA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+GPIO.add_event_detect(Enc_fourA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+
+#GPIO.add_event_detect(Enc_oneB, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+
+
+## end of GPIO configurations
+
+
 
 names = mido.get_input_names()
 im1 = "GUI_perform_480.png"
@@ -492,8 +657,11 @@ dummy = Text(app, "")  # not sure this dummy procedure is really needed
 
 filebrowsing = False
 
+signal.signal(signal.SIGINT, signal_handler)
+
+
 dummy.repeat(500, GUI) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 dummy.repeat(500, filebrowser) #update the GUI every 300ms
-
+dummy.repeat(30, update_rotaries)
 app.display()
