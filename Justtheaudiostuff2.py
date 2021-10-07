@@ -15,6 +15,7 @@ from guizero import App, Picture, Drawing, Text
 import random
 import datetime
 import math
+
 #import tkinter as tk
 
 GPIObuffer = []
@@ -24,18 +25,26 @@ def signal_handler(sig, frame): #needed for the interrupt. cleans GPIO when prog
     sys.exit(0)
 
 def button_pressed_callback(channel): #interrupt called
+
     global oneA_Last
     global oneB_Last
     global GPIObuffer
+    global onearmed
+    global Last_one
+        
     
-    oneA_Last = GPIO.input(Enc_oneA)
-    oneB_Last = GPIO.input(Enc_oneB)
-    
-    if oneA_Last != oneB_Last:
-        print(f"GPIOBUFFER!{GPIObuffer}")
-        GPIObuffer = np.append(GPIObuffer, oneA_Last)
+    if (datetime.datetime.now() - Last_one) > datetime.timedelta(milliseconds = 500):
+        oneB_Last = GPIO.input(Enc_oneB) #if A goes up, get B
+        onearmed = False
+    #GPIObuffer = np.append(GPIObuffer, oneA_Last)
         GPIObuffer = np.append(GPIObuffer, oneB_Last)
         GPIObuffer = np.append(GPIObuffer, -1)
+        print(f"GPIOBUFFER!{GPIObuffer}")
+    #oneA_Last = 1 #we use this as the detection to begin with
+        
+    Last_one = datetime.datetime.now()
+    
+
 
 def grain(rev=False, playhead_pos = 0, grainsize = 50):
     #rev: should the sample be reversed
@@ -496,11 +505,14 @@ counter_one = 0
 counter_two = 0
 counter_three = 0
 counter_four = 0
+onearmed = True #rotary encoder 1 is ready for action.
 
 #oneA_Last = GPIO.input(Enc_oneA) # previous state of the encoder
 twoA_Last = GPIO.input(Enc_twoA)
 threeA_Last = GPIO.input(Enc_threeA)
 fourA_Last = GPIO.input(Enc_fourA)
+
+Last_one = datetime.datetime.now()
 
 GPIO.add_event_detect(Enc_oneA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
 GPIO.add_event_detect(Enc_twoA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
