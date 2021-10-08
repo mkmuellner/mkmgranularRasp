@@ -24,25 +24,41 @@ def signal_handler(sig, frame): #needed for the interrupt. cleans GPIO when prog
     GPIO.cleanup()
     sys.exit(0)
 
-def button_pressed_callback(channel): #interrupt called
 
-    global oneA_Last
-    global oneB_Last
-    global GPIObuffer
-    global onearmed
-    global Last_one
-        
-    
-    if (datetime.datetime.now() - Last_one) > datetime.timedelta(milliseconds = 500):
-        oneB_Last = GPIO.input(Enc_oneB) #if A goes up, get B
-        onearmed = False
-    #GPIObuffer = np.append(GPIObuffer, oneA_Last)
-        GPIObuffer = np.append(GPIObuffer, oneB_Last)
-        GPIObuffer = np.append(GPIObuffer, -1)
-        print(f"GPIOBUFFER!{GPIObuffer}")
-    #oneA_Last = 1 #we use this as the detection to begin with
-        
-    Last_one = datetime.datetime.now()
+def button_pressed_callback(channel): #interrupt called
+    global onepressed
+    onepressed = True
+    print("SW one pressed")
+
+
+def one_turned_pressed_callback(channel): #interrupt called
+    global selector
+#     global oneA_Last
+#     global oneB_Last
+#     global GPIObuffer
+#     global onearmed
+#     global Last_one
+    #if GPIO.input(channel) == 0:
+    #    print(GPIO.input(Enc_oneB))        
+    #print(GPIO.input(Enc_oneB))
+    if GPIO.input(Enc_oneB) == 1:
+        selector += 1
+    else:
+        selector -= 1
+    if selector > 14:
+        selector = 1 #14 items total
+    if selector < 1:
+        selector = 14
+#     if (datetime.datetime.now() - Last_one) > datetime.timedelta(milliseconds = 500):
+#         oneB_Last = GPIO.input(Enc_oneB) #if A goes up, get B
+#         onearmed = False
+#     #GPIObuffer = np.append(GPIObuffer, oneA_Last)
+#         GPIObuffer = np.append(GPIObuffer, oneB_Last)
+#         GPIObuffer = np.append(GPIObuffer, -1)
+#         print(f"GPIOBUFFER!{GPIObuffer}")
+#     #oneA_Last = 1 #we use this as the detection to begin with
+#         
+#     Last_one = datetime.datetime.now()
     
 
 
@@ -63,8 +79,7 @@ def grain(rev=False, playhead_pos = 0, grainsize = 50):
 def GUI():
     global selector
     if not(filebrowsing):
-
-        
+        newd.clear()
         # use rotary one to select stuff
         selected = counter_one
         if counter_one > 14:
@@ -127,32 +142,46 @@ def GUI():
         newd.line(xposA,40,xposA,90, color = "red")
 
 def filebrowser():
-    if filebrowsing:
-
         global filebrowser_selected
-        newd.hide()
-        fbrowser = Drawing(app, width="800", height="480")
-        fbrowser.rectangle(10,10,370,400, color = "white")
-        fbrowser.rectangle(380, 10, 790, 400, color="white")
-        filelist = os.listdir()
-        indices = [i for i, x in enumerate(filelist) if ".wav" in x] #return only wav files
-        element = []
-        for index in indices:
-            element.append(filelist[index])
+        global selector
+        global filebrowsing
+        global oldselector
+        if filebrowsing:
+            newd.clear()
+            newd.rectangle(10,10,370,400, color = "white")
+            newd.rectangle(380, 10, 790, 400, color="white")
+            filelist = os.listdir()
+            indices = [i for i, x in enumerate(filelist) if ".wav" in x] #return only wav files
+            element = []
+            for index in indices:
+                element.append(filelist[index])
 
-        filelist = element
-        q = 0
-        #might want to shorten file names in the middle if longer than x
+            filelist = element
+            q = 0
+            #might want to shorten file names in the middle if longer than x
 
-        for i in filelist[0:21]:
-            fbrowser.text(30+5, 30 + q*17, i)
-            q += 1
+            for i in filelist[0:21]:
+                if q == selector:
+                    col = "red"
+                else:
+                    col = "black"
+                newd.text(30+5, 30 + q*17, i, color = col)
+                q += 1
 
-        for i in filelist[22:43]: ##44 elements can be displayed on one screen.
-            fbrowser.text(20+5+380, 30 + (q-21)*17, i)
-            q += 1
-        filebrowser_selected = 5
-        fbrowser.rectangle(15, 19+15+17*filebrowser_selected, 15+17, 19+15+17+17*filebrowser_selected, color="red")
+            for i in filelist[22:43]: ##44 elements can be displayed on one screen.
+                if q == selector:
+                    col = "red" #highlight color
+                else:
+                    col = "black"
+                newd.text(20+5+380, 30 + (q-21)*17, i, color = col)
+                q += 1
+            
+            if selector != oldselector: #if there was a change in the rotary
+                print(selector)
+                filebrowser_selected = selector
+                newd.rectangle(15, 19+15+17*oldselector, 15+17, 19+15+17+17*oldselector, color="white")
+                newd.rectangle(15, 19+15+17*selector, 15+17, 19+15+17+17*selector, color="red")
+                oldselector = selector
 
 
 def speed_up(dta, shift): #make the sound play faster (and higher in pitch)
@@ -285,7 +314,11 @@ def pitchshift(snd_array, n, window_size=2**13, h=2**11): #""" Changes the pitch
     return speedx(stretched[window_size:], factor)
 
 def mainfunc():
-    if not(filebrowsing):
+    global filebrowsing
+    if filebrowsing:
+        filebrowser()
+    
+    else:
         global dta
         global grain1
         global grain2
@@ -302,7 +335,7 @@ def mainfunc():
         global im1
         global selector
         global LFO1_parameter1
-
+        global onepressed
 
 
         if selector==0: im1 = "GUI_perform_480.png"
@@ -329,7 +362,11 @@ def mainfunc():
             im1 = "GUI_perform_480_LFO3.png"
         elif selector == 14:
             im1 = "GUI_perform_480_LFO4.png"
-
+        
+        if onepressed:
+            onepressed = False
+            if selector == 1:
+                filebrowsing = True
 
         for msg in port.iter_pending():
             if (msg.type == 'note_on') and not (changed):  # msg.note
@@ -480,6 +517,7 @@ GPIO.setmode(GPIO.BCM)
 Enc_oneA = 16
 Enc_oneB = 20
 Enc_oneSW = 21
+onepressed = False
 
 Enc_twoA = 9
 Enc_twoB = 10
@@ -500,6 +538,7 @@ for pin in [16,20,21,10,9,11,17,27,22,2,3,4]: #initialize the pins we use
     GPIO.setup(pin ,GPIO.IN)
 
 #initialize the counters
+oldselector = -1 #this stores the value of the previous selector
 
 counter_one = 0
 counter_two = 0
@@ -514,7 +553,10 @@ fourA_Last = GPIO.input(Enc_fourA)
 
 Last_one = datetime.datetime.now()
 
-GPIO.add_event_detect(Enc_oneA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+GPIO.add_event_detect(Enc_oneA, GPIO.FALLING, callback=one_turned_pressed_callback, bouncetime=100)
+GPIO.add_event_detect(Enc_oneSW, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
+
+
 GPIO.add_event_detect(Enc_twoA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
 GPIO.add_event_detect(Enc_threeA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
 GPIO.add_event_detect(Enc_fourA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
@@ -627,7 +669,7 @@ pitch1_jitter = 0
 ##
 newsample = True #just for testing the drawing of the wavefile
 selector = 0 # this sets which part of the GUI is highlighted.
-filebrowser_selected = 4 # which file is selected
+filebrowser_selected = 0 # which file is selected
 
 LFO1 = 0 #this stores the LFO value (ie the multiplier)
 LFO2 = 0
@@ -673,7 +715,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 dummy.repeat(500, GUI) #update the GUI every 300ms
+#dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
-dummy.repeat(500, filebrowser) #update the GUI every 300ms
-dummy.repeat(30, update_rotaries)
+#dummy.repeat(1, update_rotaries)
 app.display()
