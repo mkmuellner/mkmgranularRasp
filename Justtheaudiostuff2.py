@@ -458,6 +458,7 @@ def pitchshift(
 def mainfunc():
     global filebrowsing
     global selector
+    global oldselector
     if filebrowsing:
         filebrowser()
     else:
@@ -475,9 +476,24 @@ def mainfunc():
         global data_second
         global channels
         global im1
-        
+        global counter_two
+        global counter_three
+        global Volume1
+        global volume1_jitter
+        global Pitch1
+        global pitch1_jitter
         global LFO1_parameter1
         global onepressed
+        global grain_length_ms
+        global length_jitter
+        global playhead_speed
+        global playhead_jitter
+        global soundloop_times
+        global pausetime1
+
+        if oldselector != selector: #if the selector changed reset the counters
+            counter_two = 0
+            counter_three = 0
 
         if selector == 0:
             im1 = "GUI_perform_480.png"
@@ -485,20 +501,113 @@ def mainfunc():
             im1 = "GUI_perform_480_A_Soundfile.png"
         elif selector == 2:
             im1 = "GUI_perform_480_A_volume.png"
+            
+            #changing volume
+            Volume1 = 1-(counter_two*5/100)
+            if Volume1 > 1:
+                Volume1 = 1
+                counter_two = 0
+            if Volume1 < 0:
+                Volume1 = 0.01
+                counter_two = 19
+            volume1_jitter = counter_three*2/100
+            if volume1_jitter < 0:
+                volume1_jitter = 0
+                counter_three = 0
+            if volume1_jitter > 1:
+                volume1_jitter = 1
+                counter_three = 50
+            
         elif selector == 3:
             im1 = "GUI_perform_480_A_pitch.png"
+            
+            #changing pitch
+            Pitch1 = 1-(counter_two*5/100)
+            if Pitch1 > 1:
+                Pitch1 = 1
+                counter_two = 0
+            if Pitch1 < 0:
+                Pitch1 = 0.01
+                counter_two = 19
+            pitch1_jitter = counter_three*2/100
+            if pitch1_jitter < 0:
+                pitch1_jitter = 0
+                counter_three = 0
+            if pitch1_jitter > 1:
+                pitch1_jitter = 1
+                counter_three = 50
+            
+            
         elif selector == 4:
             im1 = "GUI_perform_480_A_Tuning.png"
         elif selector == 5:
             im1 = "GUI_perform_480_A_grainsize.png"
+            
+              #changing grainsize
+            grain_length_ms = 250+(counter_two*5)
+            if grain_length_ms > 1000:
+                grain_length_ms = 1000
+                counter_two = 150
+            if grain_length_ms < 30:
+                grain_length_ms = 30
+                counter_two = -6
+            length_jitter = counter_three*2/100
+            if length_jitter < 0:
+                length_jitter = 0
+                counter_three = 0
+            if length_jitter > 1:
+                length_jitter = 1
+                counter_three = 50          
+            
+            
         elif selector == 6:
             im1 = "GUI_perform_480_A_envtype.png"
         elif selector == 7:
             im1 = "GUI_perform_480_A_playspeed.png"
+
+#changing playhead
+            playhead_speed = 500+(counter_two*20)
+            if playhead_speed > 2000:
+                playhead_speed = 2000
+                counter_two = 150
+            if playhead_speed < 20:
+                playhead_speed = 20
+                counter_two = -24
+            length_jitter = counter_three*2/100
+            if length_jitter < 0:
+                length_jitter = 0
+                counter_three = 0
+            if length_jitter > 1:
+                length_jitter = 1
+                counter_three = 50       
+            
+            
         elif selector == 8:
             im1 = "GUI_perform_480_A_grainloops.png"
+            
+            #changing loops
+            soundloop_times = 0+round(counter_two/2)
+            if soundloop_times > 5:
+                soundloop_times = 5
+                counter_two = 10
+            if soundloop_times < 0:
+                soundloop_times = 0
+                counter_two = 0
+               
+            
         elif selector == 9:
             im1 = "GUI_perform_480_A_pausetime.png"
+
+#changing pausetime
+            pausetime1 = 10+(counter_two*10)
+            if pausetime1 > 400:
+                pausetime1 = 400
+                counter_two = 40
+            if pausetime1 < 0:
+                pausetime1 = 0
+                counter_two = 0
+ 
+            
         elif selector == 10:
             im1 = "GUI_perform_480_B_Soundfile.png"
         elif selector == 11:
@@ -514,6 +623,9 @@ def mainfunc():
             onepressed = False
             if selector == 1:
                 filebrowsing = True
+                
+           
+        oldselector = selector
 
         for msg in port.iter_pending():
             if (msg.type == "note_on") and not (changed):  # msg.note
