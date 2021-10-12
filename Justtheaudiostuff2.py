@@ -30,12 +30,43 @@ def signal_handler(
 
 def button_pressed_callback(channel):  # interrupt called
     global onepressed
-    onepressed = True
-    print("SW one pressed")
+    global twopressed
+    global threepressed
+    global fourpressed
 
+    #reset everything. assume only one buttonpress is supposed to be recorded at a time
+    onepressed = False
+    twopressed = False
+    threepressed = False
+    fourpressed = False
+    
+    if channel == 21:
+        onepressed = True
+        print("SW one pressed")
+    if channel == 11:
+        twopressed = True
+        print("SW two pressed")
+    if channel == 22:
+        threepressed = True
+        print("SW three pressed")
+    if channel == 4:
+        fourpressed = True
+        print("SW four pressed")
+    else:
+        print("Not sure what was pressed. Got channel:")
+        print(channel)
 
-def one_turned_pressed_callback(channel):  # interrupt called
-    global selector
+def turned_rotary_callback(channel):  # interrupt called
+    global selector #could also be using counter_one here instead
+    global counter_two
+    global counter_three
+    global counter_four
+    
+    oneB = GPIO.input(Enc_oneB)
+    twoB = GPIO.input(Enc_twoB)
+    threeB = GPIO.input(Enc_threeB)
+    fourB = GPIO.input(Enc_fourB)
+    
     #     global oneA_Last
     #     global oneB_Last
     #     global GPIObuffer
@@ -44,10 +75,32 @@ def one_turned_pressed_callback(channel):  # interrupt called
     # if GPIO.input(channel) == 0:
     #    print(GPIO.input(Enc_oneB))
     # print(GPIO.input(Enc_oneB))
-    if GPIO.input(Enc_oneB) == 1:
-        selector += 1
-    else:
-        selector -= 1
+    
+    if channel == Enc_oneA:
+        if oneB == 1:
+            selector += 1
+        else:
+            selector -= 1
+    if channel == Enc_twoA: #on that one the orientation (hardware) seems to be flipped
+        if twoB == 1:
+            counter_two += 1
+        else:
+            counter_two -= 1
+    if channel == Enc_threeA:
+        if threeB == 1:
+            counter_three += 1
+        else:
+            counter_three -= 1
+    if channel == Enc_fourA:
+        if fourB == 1:
+            counter_four += 1
+        else:
+            counter_four -= 1
+    print(f"one: {selector}")
+    print(f"two: {counter_two}")
+    print(f"three: {counter_three}")
+    print(f"four: {counter_four}")
+
 
 def grain(rev=False, playhead_pos=0, grainsize=50):
     # rev: should the sample be reversed
@@ -492,18 +545,46 @@ def mainfunc():
         # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
         # dta = cube_softclip(dta, 1)
         grain1 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+        
+        #volume control grain 1
+        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        if calcvolume > 1:
+            calcvolume =1
+        if calcvolume <0.01:
+            calcvolume = 0.01
+        grain1.set_volume(calcvolume) #set the volume
+        ## end of volume control
+        
         pygame.mixer.Sound.play(grain1, loops=soundloop_times)
         pygame.time.wait(pausetime1)
 
         dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
         # dta = speed_down(data, 12+round(LFO2*10))
         grain2 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+
+        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        if calcvolume > 1:
+            calcvolume =1
+        if calcvolume <0.01:
+            calcvolume = 0.01
+        grain2.set_volume(calcvolume) #set the volume
+        ## end of volume control
+
         pygame.mixer.Sound.play(grain2, loops=soundloop_times)
         pygame.time.wait(pausetime1)
 
         dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
         # dta = speed_up(data, 12+round(LFO1*10))
         grain3 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+        
+        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        if calcvolume > 1:
+            calcvolume =1
+        if calcvolume <0.01:
+            calcvolume = 0.01
+        grain3.set_volume(calcvolume) #set the volume
+        ## end of volume control
+        
         pygame.mixer.Sound.play(grain3, loops=soundloop_times)
 
         if not (playhead_reversed):
@@ -623,14 +704,17 @@ onepressed = False
 Enc_twoA = 9
 Enc_twoB = 10
 Enc_twoSW = 11
+twopressed = False
 
-Enc_threeA = 27
-Enc_threeB = 17
+Enc_threeA = 17
+Enc_threeB = 27
 Enc_threeSW = 22
+Threepressed = False
 
 Enc_fourA = 2
 Enc_fourB = 3
 Enc_fourSW = 4
+fourpressed = False
 
 oneA_Last = -1
 oneB_Last = -1
@@ -655,21 +739,30 @@ fourA_Last = GPIO.input(Enc_fourA)
 Last_one = datetime.datetime.now()
 
 GPIO.add_event_detect(
-    Enc_oneA, GPIO.FALLING, callback=one_turned_pressed_callback, bouncetime=100
-)
-GPIO.add_event_detect(
     Enc_oneSW, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
 )
+GPIO.add_event_detect(
+    Enc_twoSW, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+)
+GPIO.add_event_detect(
+    Enc_threeSW, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+)
+GPIO.add_event_detect(
+    Enc_fourSW, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+)
 
 
 GPIO.add_event_detect(
-    Enc_twoA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+    Enc_oneA, GPIO.FALLING, callback=turned_rotary_callback, bouncetime=30
 )
 GPIO.add_event_detect(
-    Enc_threeA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+    Enc_twoA, GPIO.FALLING, callback=turned_rotary_callback, bouncetime=30
 )
 GPIO.add_event_detect(
-    Enc_fourA, GPIO.RISING, callback=button_pressed_callback, bouncetime=100
+    Enc_threeA, GPIO.FALLING, callback=turned_rotary_callback, bouncetime=30
+)
+GPIO.add_event_detect(
+    Enc_fourA, GPIO.FALLING, callback=turned_rotary_callback, bouncetime=30
 )
 
 # GPIO.add_event_detect(Enc_oneB, GPIO.RISING, callback=button_pressed_callback, bouncetime=100)
@@ -767,7 +860,7 @@ LFO3_parameter1 = 0.2
 LFO4_parameter1 = 0.2
 LFO1_parameter2 = 0.2  # for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 0.3
-LFO3_parameter2 = 0.3
+LmFO3_parameter2 = 0.3
 LFO4_parameter2 = 0.4
 envelopetype = 1
 Volume1 = 1.0
