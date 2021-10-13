@@ -102,20 +102,6 @@ def turned_rotary_callback(channel):  # interrupt called
     print(f"four: {counter_four}")
 
 
-def grain(rev=False, playhead_pos=0, grainsize=50):
-    # rev: should the sample be reversed
-    # playhead_pos: position of the playhead in the sample in fraction. 1 = end of file
-    # grainsize: size of the grain in milliseconds
-
-    global data_s16
-    global Fs  # the sampling rate
-    global channels  # mono (1) or stereo (2)
-
-    grainsmp = data_s16[playhead_pos * len()]
-
-    if rev:  # should the sample be reversed
-        data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
-
 def GUI():
     global selector
     global filebrowsing
@@ -136,6 +122,9 @@ def GUI():
         global im1
         global playhead_position
         global newsample
+        global grain_length_samples
+        global grain_waittime_ms
+        global reversegrain
 
         newd.image(0, 0, image=im1)
 
@@ -144,7 +133,7 @@ def GUI():
         newd.text(145, 127 + 26 * 1, Pitch1)
         newd.text(145, 127 + 26 * 2 - 3, Tuning1)
         newd.text(145, 127 + 26 * 3 + 18, round(grain_length_ms))
-        newd.text(145, 127 + 26 * 3 + 18 + 24, envelopetype)
+        newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
         newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
         newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
         newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, pausetime1)
@@ -164,7 +153,11 @@ def GUI():
 
         # flip on
         # newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
-        newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+        if reversegrain:
+            newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+        else:
+            newd.image(225, 179, image="FLIP_on.png")  # then flip it to off if needed.
+        
 
         # picture is 302 x 74 at position 318, 30
         # draws a picture of the waveform
@@ -186,6 +179,10 @@ def GUI():
         # playhead position
         xposA = 302 / len(data) * playhead_position + 10
         newd.line(xposA, 40, xposA, 90, color="red")
+        
+        #these two below here only need to be updated when the GUI value changes anyway
+        grain_length_samples = round(grain_length_ms * (int(Fs) / 1000))  # grain length now in samples
+        grain_waittime_ms = (1000.0 / grains_per_second)  # how long to wait after one grain is triggered
 
 
 def filebrowser():
@@ -304,7 +301,7 @@ def speed_down(
 
 
 def decfun(x):
-    y = 2 ** (-0.01 * x)
+    y = 2 ** ((-0.01*1/(grain_length_ms/250)) * x) #the grain lethgth divided by 100 kinda works out
     return y
 
 
@@ -340,6 +337,8 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
     global currentgrain
     global grain_length_ms
     global soundloop_times
+    global Pitch1
+    
     # print(".")
 
     if envtype == 1:  # hann envelope
@@ -348,7 +347,14 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
         dta = env_decay(dta)
     elif envtype == 3:  # exp envelope
         dta = env_exp(dta)
-
+    
+    if Pitch1 != 1:
+        dta = pitchshift(dta, Pitch1)
+    
+    ##reverse
+    if reversegrain:
+        dta = reverse(dta)
+    
     dta = np.vstack(
         (dta, dta)
     ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
@@ -459,7 +465,9 @@ def mainfunc():
     global filebrowsing
     global selector
     global oldselector
+    global reversegrain
     if filebrowsing:
+        reversegrain = False
         filebrowser()
     else:
         global dta
@@ -489,11 +497,14 @@ def mainfunc():
         global playhead_speed
         global playhead_jitter
         global soundloop_times
-        global pausetime1
+        global pausetime
+        
+        global envtype
 
         if oldselector != selector: #if the selector changed reset the counters
             counter_two = 0
             counter_three = 0
+            
 
         if selector == 0:
             im1 = "GUI_perform_480.png"
@@ -540,6 +551,13 @@ def mainfunc():
             
         elif selector == 4:
             im1 = "GUI_perform_480_A_Tuning.png"
+            
+            
+            if counter_three % 2 == 0: #even number
+                reversegrain = True
+            else:
+                reversegrain = False
+            
         elif selector == 5:
             im1 = "GUI_perform_480_A_grainsize.png"
             
@@ -562,6 +580,14 @@ def mainfunc():
             
         elif selector == 6:
             im1 = "GUI_perform_480_A_envtype.png"
+            
+            if counter_two > 3:
+                counter_two = 1
+            if counter_two < 1:
+                counter_two = 3
+            envtype = counter_two
+            
+            
         elif selector == 7:
             im1 = "GUI_perform_480_A_playspeed.png"
 
@@ -623,8 +649,8 @@ def mainfunc():
             onepressed = False
             if selector == 1:
                 filebrowsing = True
-                
-           
+               
+          
         oldselector = selector
 
         for msg in port.iter_pending():
@@ -656,10 +682,12 @@ def mainfunc():
 
         # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
         # dta = cube_softclip(dta, 1)
-        grain1 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+        grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
         
         #volume control grain 1
-        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        volume_correction_factor = 0.06 #volume of 1 is ususally too loud for headphones
+        
+        calcvolume = volume_correction_factor*Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter. 
         if calcvolume > 1:
             calcvolume =1
         if calcvolume <0.01:
@@ -668,13 +696,13 @@ def mainfunc():
         ## end of volume control
         
         pygame.mixer.Sound.play(grain1, loops=soundloop_times)
-        pygame.time.wait(pausetime1)
+        #pygame.time.wait(pausetime1)
 
-        dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+        dta = next_grain(data, playhead_position+playhead_speed, playhead_jitter, length_jitter)
         # dta = speed_down(data, 12+round(LFO2*10))
-        grain2 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+        grain2 = pygame.mixer.Sound(play_ready(dta, envtype))
 
-        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        calcvolume = volume_correction_factor*Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
         if calcvolume > 1:
             calcvolume =1
         if calcvolume <0.01:
@@ -683,13 +711,13 @@ def mainfunc():
         ## end of volume control
 
         pygame.mixer.Sound.play(grain2, loops=soundloop_times)
-        pygame.time.wait(pausetime1)
+        #pygame.time.wait(pausetime1)
 
-        dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+        dta = next_grain(data, playhead_position+playhead_speed*2, playhead_jitter, length_jitter)
         # dta = speed_up(data, 12+round(LFO1*10))
-        grain3 = pygame.mixer.Sound(play_ready(dta, envelopetype))
+        grain3 = pygame.mixer.Sound(play_ready(dta, envtype))
         
-        calcvolume = Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
+        calcvolume = volume_correction_factor*Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
         if calcvolume > 1:
             calcvolume =1
         if calcvolume <0.01:
@@ -698,7 +726,7 @@ def mainfunc():
         ## end of volume control
         
         pygame.mixer.Sound.play(grain3, loops=soundloop_times)
-
+        #pygame.time.wait(pausetime1)
         if not (playhead_reversed):
             playhead_position = playhead_position + playhead_speed
         else:
@@ -789,20 +817,6 @@ def update_rotaries():  # updates the rotary encoder info from GPIO
 #
 #         fourA_Last = fourA_State
 
-
-def grain(rev=False, playhead_pos=0, grainsize=50):
-    # rev: should the sample be reversed
-    # playhead_pos: position of the playhead in the sample in fraction. 1 = end of file
-    # grainsize: size of the grain in milliseconds
-
-    global data_s16
-    global Fs  # the sampling rate
-    global channels  # mono (1) or stereo (2)
-
-    grainsmp = data_s16[playhead_pos * len()]
-
-    if rev:  # should the sample be reversed
-        data_s16 = np.flip(data_s16)  # flip the sample data (reverse)
 
 
 ## GPIO configuration for rotary encoders.
@@ -916,7 +930,7 @@ Fs_second, data_second = read(sample2)
 channels = 12
 # pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
 pygame.mixer.pre_init(
-    buffer=2048, frequency=Fs, channels=channels
+    buffer=1024, frequency=Fs, channels=channels
 )  # lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
@@ -952,7 +966,7 @@ data_backup = data  # back up the original data to be able to reset
 data_backup_second = data_second
 
 # data = reverse(data)
-
+reversegrain = False #should the grain be reversed
 grain_length_ms = 250.0  # in milliseconds (global)
 grains_per_second = 4.0  # how many grains are triggered per second
 number_of_grains = 4  # how many grain channels are there (for pygame)
@@ -972,9 +986,9 @@ LFO3_parameter1 = 0.2
 LFO4_parameter1 = 0.2
 LFO1_parameter2 = 0.2  # for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 0.3
-LmFO3_parameter2 = 0.3
+LFO3_parameter2 = 0.3
 LFO4_parameter2 = 0.4
-envelopetype = 1
+envtype = 1
 Volume1 = 1.0
 Volume2 = 1.0
 Tuning1 = "C"
@@ -1027,7 +1041,7 @@ changed = False  # only process the audio once
 data_second = stretch(data_second, 10, 2 ** 13, 2 ** 11)
 constant_sample = pygame.mixer.Sound(play_ready(data_second, 0))  # no envelope
 constant_sample.set_volume(0.05)
-pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
+#pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300) deactivaterd for now
 
 app = App(width=800, height=480, bg="gray50")
 # app.set_full_screen()
@@ -1039,7 +1053,7 @@ filebrowsing = False
 signal.signal(signal.SIGINT, signal_handler)
 
 
-dummy.repeat(500, GUI)  # update the GUI every 300ms
+dummy.repeat(130, GUI)  # update the GUI every 300ms
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 # dummy.repeat(1, update_rotaries)
