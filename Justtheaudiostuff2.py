@@ -125,10 +125,20 @@ def GUI():
         global grain_length_samples
         global grain_waittime_ms
         global reversegrain
+        global Right_Limit
+        global Left_Limit
+        
 
         newd.image(0, 0, image=im1)
 
-        # left column granular
+        #limiters
+        #leftmost is 5 rightmost is 300
+        Left_Limiter_Pos = 5+round(Left_Limit/len(data)*(300-5))
+        Right_Limiter_Pos = 5+round(Right_Limit/len(data)*(300-5))
+        newd.text(Left_Limiter_Pos,20,"|", color = "white") #y = 58 is center
+        newd.text(Right_Limiter_Pos,20,"|", color = "white")
+        
+        
         newd.text(145, 127, Volume1)
         newd.text(145, 127 + 26 * 1, Pitch1)
         newd.text(145, 127 + 26 * 2 - 3, Tuning1)
@@ -271,6 +281,8 @@ def loadsamples(): #load a new sample 1 or 2
     global data_second
     global data_backup
     global data_backup_second
+    global Right_Limit
+    global Left_Limit
     
     # read the wave file and give some stats about it
     Fs, data = read(sample1)  # read the wave file
@@ -282,6 +294,8 @@ def loadsamples(): #load a new sample 1 or 2
 
     data_backup = data  # back up the original data to be able to reset
     data_backup_second = data_second
+    Right_Limit = len(data)
+    Left_Limit = 1
 
 
     
@@ -379,7 +393,7 @@ def next_grain(
     endposition = (
         ex_position
         + grain_length_samples
-        + round(grain_length_samples * length_jitter * (0.5 - float(random.random())))
+        + int(grain_length_samples * length_jitter * (0.5 - float(random.random())))
     )
     extracted = data[ex_position:endposition]
     return extracted
@@ -497,31 +511,50 @@ def mainfunc():
         global playhead_speed
         global playhead_jitter
         global soundloop_times
-        global pausetime
-        
+        global pausetime1
+        global speed_jitter
         global envtype
+        global Right_Limit
+        global Left_Limit
 
         if oldselector != selector: #if the selector changed reset the counters
             counter_two = 0
             counter_three = 0
             
 
-        if selector == 0:
+        if selector == 1:
             im1 = "GUI_perform_480.png"
-        elif selector == 1:
+                        
+            
+            Left_Limit = int(Left_Limit+counter_two*len(data)/100)
+            Right_Limit = int(Right_Limit+counter_three*len(data)/100)
+            
+            if Left_Limit < 1:
+                Left_Limit = 1
+            if Right_Limit > len(data):
+                Right_Limit = len(data)
+            if Left_Limit > Right_Limit: #if left and right cross, just swap the values
+                holder = Right_Limit
+                Right_Limit = Left_Limit
+                Left_Limit = holder
+                
+        elif selector == 0:
             im1 = "GUI_perform_480_A_Soundfile.png"
+
+            
+            
         elif selector == 2:
             im1 = "GUI_perform_480_A_volume.png"
             
             #changing volume
-            Volume1 = 1-(counter_two*5/100)
+            Volume1 = Volume1+(counter_two*5/100)
             if Volume1 > 1:
                 Volume1 = 1
                 counter_two = 0
             if Volume1 < 0:
                 Volume1 = 0.01
                 counter_two = 19
-            volume1_jitter = counter_three*2/100
+            volume1_jitter = volume1_jitter+counter_three*2/100
             if volume1_jitter < 0:
                 volume1_jitter = 0
                 counter_three = 0
@@ -533,21 +566,21 @@ def mainfunc():
             im1 = "GUI_perform_480_A_pitch.png"
             
             #changing pitch
-            Pitch1 = 1-(counter_two*5/100)
-            if Pitch1 > 1:
-                Pitch1 = 1
+            #this does not work yet, anything other than 1 crashes
+            Pitch1 = Pitch1+(counter_two)
+            if Pitch1 > 10:
+                Pitch1 = 10
                 counter_two = 0
-            if Pitch1 < 0:
-                Pitch1 = 0.01
+            if Pitch1 < 1:
+                Pitch1 = 1
                 counter_two = 19
-            pitch1_jitter = counter_three*2/100
+            pitch1_jitter = pitch1_jitter+counter_three
             if pitch1_jitter < 0:
                 pitch1_jitter = 0
                 counter_three = 0
             if pitch1_jitter > 1:
                 pitch1_jitter = 1
                 counter_three = 50
-            
             
         elif selector == 4:
             im1 = "GUI_perform_480_A_Tuning.png"
@@ -562,14 +595,14 @@ def mainfunc():
             im1 = "GUI_perform_480_A_grainsize.png"
             
               #changing grainsize
-            grain_length_ms = 250+(counter_two*5)
+            grain_length_ms = grain_length_ms+(counter_two*5)
             if grain_length_ms > 1000:
                 grain_length_ms = 1000
                 counter_two = 150
             if grain_length_ms < 30:
                 grain_length_ms = 30
                 counter_two = -6
-            length_jitter = counter_three*2/100
+            length_jitter = length_jitter+counter_three*2/100
             if length_jitter < 0:
                 length_jitter = 0
                 counter_three = 0
@@ -581,30 +614,31 @@ def mainfunc():
         elif selector == 6:
             im1 = "GUI_perform_480_A_envtype.png"
             
-            if counter_two > 3:
-                counter_two = 1
-            if counter_two < 1:
-                counter_two = 3
-            envtype = counter_two
+            envtype = envtype+counter_two
+            if envtype > 3:
+                envtype = 1
+            if envtype < 1:
+                envtype = 3
+            
             
             
         elif selector == 7:
             im1 = "GUI_perform_480_A_playspeed.png"
 
 #changing playhead
-            playhead_speed = 500+(counter_two*20)
+            playhead_speed = playhead_speed+(counter_two*20)
             if playhead_speed > 2000:
                 playhead_speed = 2000
                 counter_two = 150
             if playhead_speed < 20:
                 playhead_speed = 20
                 counter_two = -24
-            length_jitter = counter_three*2/100
-            if length_jitter < 0:
-                length_jitter = 0
+            speed_jitter = speed_jitter+counter_three*2/100
+            if speed_jitter < 0:
+                speed_jitter = 0
                 counter_three = 0
-            if length_jitter > 1:
-                length_jitter = 1
+            if speed_jitter > 1:
+                speed_jitter = 1
                 counter_three = 50       
             
             
@@ -612,7 +646,7 @@ def mainfunc():
             im1 = "GUI_perform_480_A_grainloops.png"
             
             #changing loops
-            soundloop_times = 0+round(counter_two/2)
+            soundloop_times = soundloop_times+round(counter_two/2)
             if soundloop_times > 5:
                 soundloop_times = 5
                 counter_two = 10
@@ -625,7 +659,7 @@ def mainfunc():
             im1 = "GUI_perform_480_A_pausetime.png"
 
 #changing pausetime
-            pausetime1 = 10+(counter_two*10)
+            pausetime1 = pausetime1+(counter_two*10)
             if pausetime1 > 400:
                 pausetime1 = 400
                 counter_two = 40
@@ -647,10 +681,13 @@ def mainfunc():
 
         if onepressed:
             onepressed = False
-            if selector == 1:
+            if selector == 0:
                 filebrowsing = True
-               
-          
+        
+        #reset things again
+        counter_two = 0
+        counter_three = 0
+        
         oldselector = selector
 
         for msg in port.iter_pending():
@@ -679,7 +716,9 @@ def mainfunc():
         updateLFO()
         # begin_time = datetime.datetime.now()
         dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-
+                # update playhead position
+        update_playhead()
+        
         # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
         # dta = cube_softclip(dta, 1)
         grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
@@ -698,7 +737,9 @@ def mainfunc():
         pygame.mixer.Sound.play(grain1, loops=soundloop_times)
         #pygame.time.wait(pausetime1)
 
-        dta = next_grain(data, playhead_position+playhead_speed, playhead_jitter, length_jitter)
+        dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+        # update playhead position
+        update_playhead()
         # dta = speed_down(data, 12+round(LFO2*10))
         grain2 = pygame.mixer.Sound(play_ready(dta, envtype))
 
@@ -713,8 +754,11 @@ def mainfunc():
         pygame.mixer.Sound.play(grain2, loops=soundloop_times)
         #pygame.time.wait(pausetime1)
 
-        dta = next_grain(data, playhead_position+playhead_speed*2, playhead_jitter, length_jitter)
+        dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
         # dta = speed_up(data, 12+round(LFO1*10))
+                # update playhead position
+        update_playhead()
+        
         grain3 = pygame.mixer.Sound(play_ready(dta, envtype))
         
         calcvolume = volume_correction_factor*Volume1 + volume1_jitter*(0.5-random.random()) #add the jitter
@@ -726,98 +770,36 @@ def mainfunc():
         ## end of volume control
         
         pygame.mixer.Sound.play(grain3, loops=soundloop_times)
-        #pygame.time.wait(pausetime1)
-        if not (playhead_reversed):
-            playhead_position = playhead_position + playhead_speed
-        else:
-            playhead_position = playhead_position - playhead_speed
-
-        if playhead_position > len(data):
-            playhead_position = len(data) - grain_length_samples
-            playhead_reversed = True
-            print("playhead reverse")
-        if playhead_position < 1:
-            playhead_position = grain_length_samples
-            playhead_reversed = False
-            print("playhead forward")
+ 
 
         # pygame.time.wait(pausetime1)
 
 
-def update_rotaries():  # updates the rotary encoder info from GPIO
-    global oneA_Last
-    global oneB_Last
-    global twoA_Last
-    global threeA_Last
-    global fourA_Last
-
-    global counter_one
-    global counter_two
-    global counter_three
-    global counter_four
 
 
-#         if oneA_Last != -1 :
-#             print("---")
-#             print(f"EncA:{oneA_Last}")
-#             print(f"EncB:{oneB_Last}")
-#             oneA_Last = -1
-#             oneB_Last = -1
-# oneA_State = GPIO.input(Enc_oneA)
-# oneB_State = GPIO.input(Enc_oneB)
 
-#         twoA_State = GPIO.input(Enc_twoA)
-#         twoB_State = GPIO.input(Enc_twoB)
-#
-#         threeA_State = GPIO.input(Enc_threeA)
-#         threeB_State = GPIO.input(Enc_threeB)
-#
-#         fourA_State = GPIO.input(Enc_fourA)
-#         fourB_State = GPIO.input(Enc_fourB)
-#
-#         #print(f"----{datetime.datetime.now()}")
-#         #print(oneA_State)
-#         #print(oneB_State)
-#         #print(counter_one)
-#
-#         if oneA_State != oneA_Last:
-#             if oneB_State != oneA_State:
-#                 if int(counter_one/2) < 24:
-#                     counter_one += 1
-#             else:
-#                 if int(counter_one/2) > 0:
-#                     counter_one -= 1
-#
-#
-#
-#
-#         oneA_Last = oneA_State
-#
-#         if twoA_State != twoA_Last:
-#             if twoB_State != twoA_State:
-#                 counter_two += 1
-#             else:
-#                 counter_two -= 1
-#
-#         twoA_Last = twoA_State
-#
-#         if threeA_State != threeA_Last:
-#             if threeB_State != threeA_State:
-#                 counter_three += 1
-#             else:
-#                 counter_three -= 1
-#
-#         threeA_Last = threeA_State
-#
-#         if fourA_State != fourA_Last:
-#             if fourB_State != fourA_State:
-#                 counter_four += 1
-#             else:
-#                 counter_four -= 1
-#
-#         fourA_Last = fourA_State
+def update_playhead():
+    global playhead_position
+    global speed_jitter
+    global playhead_speed
+    global playhead_reversed
+
+       #pygame.time.wait(pausetime1)
+    if not (playhead_reversed):
+        
+        playhead_position = int(playhead_position+playhead_speed+speed_jitter*(0.5-random.random()))
+    else:
+        playhead_position = int(playhead_position-playhead_speed+speed_jitter*(0.5-random.random()))
 
 
+    if playhead_position > Right_Limit:
+        playhead_position = Right_Limit - grain_length_samples
+        playhead_reversed = True
+        print("playhead reverse")
+    if playhead_position < Left_Limit:
+        playhead_position = grain_length_samples
+        playhead_reversed = False
+        print("playhead forward")
 
 ## GPIO configuration for rotary encoders.
 GPIO.setmode(GPIO.BCM)
@@ -971,6 +953,7 @@ grain_length_ms = 250.0  # in milliseconds (global)
 grains_per_second = 4.0  # how many grains are triggered per second
 number_of_grains = 4  # how many grain channels are there (for pygame)
 playhead_speed = 500  # playhead movement in samples per second
+speed_jitter = 0
 playhead_jitter = 0.2  # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 length_jitter = 0.1  # fold of original grain length
 playhead_reversed = (
@@ -988,6 +971,8 @@ LFO1_parameter2 = 0.2  # for sine this will be amplitude factor (multiplier)
 LFO2_parameter2 = 0.3
 LFO3_parameter2 = 0.3
 LFO4_parameter2 = 0.4
+Right_Limit = len(data)#pretty random number to initialize
+Left_Limit = 1
 envtype = 1
 Volume1 = 1.0
 Volume2 = 1.0
