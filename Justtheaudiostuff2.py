@@ -303,6 +303,42 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
     # compared to just running a single call to pygame.Mixer.Sound.play with a single sound.
     return sounddata
 
+def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready function
+    global currentgrain
+    global grain_length_ms
+    global soundloop_times
+    global Pitch1
+
+    # print(".")
+
+    if envtype == 1:  # hann envelope
+        dta = env_hann(dta)
+    elif envtype == 2:  # decay 1/x envelope
+        dta = env_decay(dta)
+    elif envtype == 3:  # exp envelope
+        dta = env_exp(dta)
+
+    if Pitch1 != 1:
+        dta = pitchshift(dta, Pitch1)
+
+    ##reverse
+    if reversegrain:
+        dta = reverse(dta)
+
+    if True:  # speed change
+        dta = speed_down(dta, random.randrange(1, 6))
+
+    if smooth:  # might want to be able to turn smoothing off
+        dta = smoothen(dta)
+    return(dta)
+
+def play_ready_deprec(dta):
+    dta = np.vstack(
+    (dta, dta)
+    ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
+    dta = dta.astype("i2")  # convert data to 16 bit int format
+    sounddata = dta.tobytes()  # convert to buffer (sound data)
+    return sounddata
 
 def next_grain(
     data, playhead_position, playhead_jitter, length_jitter
@@ -413,12 +449,27 @@ def graintrigger(
     pdata,
 ):  # this now allows to change up the datafile to pick the grain from
     global grain1
-    update_playhead()
-    dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
+    
+    single = False #single would be the regular mode
+    if single:
+        update_playhead()
+        dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
+        grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
+
+    else: #link together 4 grains. should do in a loop next
+        dta_out = np.empty(shape = (0,0))
+        
+        for i in range(10):
+            update_playhead()
+            dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
+            dta_out = np.append(dta_out,FX(dta,1,True))
+            print(i)
+        dta = dta_out
+        grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+        
     # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
     # dta = cube_softclip(dta, 1)
-    grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
-
+    
     # volume control grain 1
     volume_correction_factor = 0.06  # volume of 1 is ususally too loud for headphones
 
