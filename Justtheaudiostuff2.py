@@ -193,6 +193,8 @@ def loadsamples():  # load a new sample 1 or 2
     global data_backup_second
     global Right_Limit
     global Left_Limit
+    global len_data
+    global len_data_second
 
     # read the wave file and give some stats about it
     Fs, data = read(sample1)  # read the wave file
@@ -200,10 +202,11 @@ def loadsamples():  # load a new sample 1 or 2
 
     data = data[:, 0]  # only process the left channel
     data_second = data_second[:, 0]  # only process the left channel
-
+    len_data = len(data) #update length variables so I don't have to constantly calc them
+    len_data_second = len(data_second)
     data_backup = data  # back up the original data to be able to reset
     data_backup_second = data_second
-    Right_Limit = len(data)
+    Right_Limit = len_data
     Left_Limit = 1
 
 
@@ -311,8 +314,8 @@ def next_grain(
     jitter = int(sample_length * playhead_jitter * ((0.5 - random.random())))
     ex_position = playhead_position + jitter
 
-    if ex_position > (len(data) - grain_length_samples - 1):
-        ex_position = len(data) + (sample_length - ex_position)
+    if ex_position > (len_data - grain_length_samples - 1):
+        ex_position = len_data + (sample_length - ex_position)
     if ex_position < 0:
         ex_position = abs(ex_position)
     endposition = (
@@ -324,7 +327,7 @@ def next_grain(
     grain_length_samples = len(extracted)
 
     # make a little dot at grainpos
-    xposA1 = (300 - 5) / len(data) * ex_position + 5
+    xposA1 = (300 - 5) / len_data * ex_position + 5
     newd.text(xposA1, 65, "|", color="white")
     #    newd.line(xposA, 60, xposA, 70, color="lightred")
     return extracted
@@ -467,10 +470,16 @@ def GUI():
 
         # limiters
         # leftmost is 5 rightmost is 300
-        Left_Limiter_Pos = 5 + round(Left_Limit / len(data) * (300 - 5))
-        Right_Limiter_Pos = 5 + round(Right_Limit / len(data) * (300 - 5))
+        Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
+        Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
+        #Left_Limiter_Pos2 = 315 + round(Left_Limit2 / len_data_second * (300 - 5))
+        #Right_Limiter_Pos2 = 315 + round(Right_Limit2 / len_data_second * (300 - 5))
+        
         newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
         newd.text(Right_Limiter_Pos, 20, "|", color="white")
+        
+        #newd.text(Left_Limiter_Pos2, 20, "|", color="white")  # y = 58 is center
+        #newd.text(Right_Limiter_Pos2, 20, "|", color="white")
 
         newd.text(145, 127, "{:.2f}".format(Volume1))
         newd.text(145, 127 + 26 * 1, "{:.2f}".format(Pitch1))
@@ -512,7 +521,7 @@ def GUI():
                 dpi=my_monitors_dpi,
             )  # need to change DPI value here for the small monitor
             plt.axis("off")
-            plt.xlim([0, len(data)])
+            plt.xlim([0, len_data])
             plt.plot(data, color="black")
             plt.savefig(fname="AudioA.png", bbox_inches="tight", transparent=True)  #
             plt.close()
@@ -521,7 +530,7 @@ def GUI():
                 dpi=my_monitors_dpi,
             )  # need to change DPI value here for the small monitor
             plt.axis("off")
-            plt.xlim([0, len(data_second)])
+            plt.xlim([0, len_data_second])
             plt.plot(data, color="black")
             plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
             plt.close()           
@@ -531,7 +540,7 @@ def GUI():
         newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
         newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
         # playhead position
-        xposA = (300 - 5) / len(data) * playhead_position + 5
+        xposA = (300 - 5) / len_data * playhead_position + 5
 
         newd.line(xposA, 40, xposA, 90, color="red")
 
@@ -593,13 +602,13 @@ def mainfunc():
         if selector == 1:
             im1 = "GUI_perform_480_SoundA.png"
 
-            Left_Limit = int(Left_Limit + counter_two * 4 * len(data) / 100)
-            Right_Limit = int(Right_Limit + counter_three * 4 * len(data) / 100)
+            Left_Limit = int(Left_Limit + counter_two * 4 * len_data / 100)
+            Right_Limit = int(Right_Limit + counter_three * 4 * len_data / 100)
 
             if Left_Limit < 1:
                 Left_Limit = 1
-            if Right_Limit > len(data):
-                Right_Limit = len(data)
+            if Right_Limit > len_data:
+                Right_Limit = len_data
             if (
                 Left_Limit > Right_Limit
             ):  # if left and right cross, just swap the values
@@ -745,6 +754,22 @@ def mainfunc():
 
         elif selector == 10:
             im1 = "GUI_perform_480_B_Soundfile.png"
+            
+            Left_Limit2 = int(Left_Limit2 + counter_two * 4 * len_data_second / 100)
+            Right_Limit2 = int(Right_Limit2 + counter_three * 4 * len_data_second / 100)
+
+            if Left_Limit2 < 1:
+                Left_Limit2 = 1
+            if Right_Limit2 > len_data_second:
+                Right_Limit2 = len_data_second
+            if (
+                Left_Limit2 > Right_Limit2
+            ):  # if left and right cross, just swap the values
+                holder = Right_Limit2
+                Right_Limit2 = Left_Limit2
+                Left_Limit2 = holder
+
+
         elif selector == 11:
             im1 = "GUI_perform_480_LFO1.png"
         elif selector == 12:
@@ -959,6 +984,9 @@ print(f"length = {length}s")
 data = data[:, 0]  # only process the left channel
 data_second = data_second[:, 0]  # only process the left channel
 
+len_data = len(data)
+len_data_second = len(data_second)
+
 # #plot the waveform
 # plt.figure()
 # plt.plot(data_s16)
@@ -1049,9 +1077,9 @@ port = mido.open_input(names[0])
 changed = False  # only process the audio once
 
 ### start the sample playback
-data_second = stretch(data_second, 10, 2 ** 13, 2 ** 11)
-constant_sample = pygame.mixer.Sound(play_ready(data_second, 0))  # no envelope
-constant_sample.set_volume(0.05)
+#data_second = stretch(data_second, 10, 2 ** 13, 2 ** 11)
+#constant_sample = pygame.mixer.Sound(play_ready(data_second, 0))  # no envelope
+#constant_sample.set_volume(0.05)
 # pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300) deactivaterd for now
 
 app = App(width=800, height=480, bg="gray50")
