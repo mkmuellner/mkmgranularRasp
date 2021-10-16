@@ -210,10 +210,9 @@ def loadsamples():  # load a new sample 1 or 2
     Left_Limit = 1
 
 
-def smoothen(
-    dta,
-):  # reduce the harshness by running a simple running average as a lowpass filter
-    return uniform_filter1d(dta, size=4)  # size gives the amount of smoothing
+def smoothen(dta,size = 4):  # reduce the harshness by running a simple running average as a lowpass filter
+    # I can use the same function as a filter (low pass)
+    return uniform_filter1d(dta, size)  # size gives the amount of smoothing
 
 
 def speed_up(dta, shift):  # make the sound play faster (and higher in pitch)
@@ -291,8 +290,14 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
     if True:  # speed change
         dta = speed_down(dta, random.randrange(1, 6))
 
+    #just for dev
+    useLFO = False
+        
     if True:  # might want to be able to turn smoothing off
-        dta = smoothen(dta)
+        if useLFO:
+            dta = smoothen(dta, int(LFO1*100))
+        else:
+            dta = smoothen(dta,2)
 
     dta = np.vstack(
         (dta, dta)
@@ -459,11 +464,11 @@ def graintrigger(
     else: #link together 4 grains. should do in a loop next
         dta_out = np.empty(shape = (0,0))
         
-        for i in range(10):
+        for i in range(2): #going higher here prevents drawing of the GUI
             update_playhead()
             dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
             dta_out = np.append(dta_out,FX(dta,1,True))
-            print(i)
+            #print(i)
         dta = dta_out
         grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
         
