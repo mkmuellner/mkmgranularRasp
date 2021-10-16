@@ -98,7 +98,7 @@ def turned_rotary_callback(channel):  # interrupt called
     print(f"four: {counter_four}")
 
 
-def filebrowser(AorB):
+def filebrowser():
     global filebrowser_selected
     global selector
     global filebrowsing
@@ -168,9 +168,9 @@ def filebrowser(AorB):
         if onepressed:
             onepressed = False
             #now decide which of the samples will be handed back
-            if AorB == 1:
+            if chosensample == 1:
                 sample1 = filelist[selector]
-            if AorB == 2:
+            if chosensample == 2:
                 sample2 = filelist[selector]
             
             loadsamples()
@@ -195,6 +195,8 @@ def loadsamples():  # load a new sample 1 or 2
     global Left_Limit
     global len_data
     global len_data_second
+    global Right_Limit_second
+    global Left_Limit_second
 
     # read the wave file and give some stats about it
     Fs, data = read(sample1)  # read the wave file
@@ -208,7 +210,28 @@ def loadsamples():  # load a new sample 1 or 2
     data_backup_second = data_second
     Right_Limit = len_data
     Left_Limit = 1
-
+    Right_Limit_second = len_data_second
+    Left_Limit_second = 1
+    #create the files
+    my_monitors_dpi = 96
+    plt.figure(
+        figsize=(370 / my_monitors_dpi, 74 / my_monitors_dpi),  # 370
+        dpi=my_monitors_dpi,
+    )  # need to change DPI value here for the small monitor
+    plt.axis("off")
+    plt.xlim([0, len_data])
+    plt.plot(data, color="black")
+    plt.savefig(fname="AudioA.png", bbox_inches="tight", transparent=True)  #
+    plt.close()
+    plt.figure(
+        figsize=(370 / my_monitors_dpi, 74 / my_monitors_dpi),  # 370
+        dpi=my_monitors_dpi,
+    )  # need to change DPI value here for the small monitor
+    plt.axis("off")
+    plt.xlim([0, len_data_second])
+    plt.plot(data_second, color="black")
+    plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
+    plt.close()   
 
 def smoothen(dta,size = 4):  # reduce the harshness by running a simple running average as a lowpass filter
     # I can use the same function as a filter (low pass)
@@ -455,13 +478,13 @@ def graintrigger(
 ):  # this now allows to change up the datafile to pick the grain from
     global grain1
     
-    single = False #single would be the regular mode
-    if single:
+    single = 3 #single would be the regular mode
+    if single == 1:
         update_playhead()
         dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
         grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
 
-    else: #link together 4 grains. should do in a loop next
+    if single ==2: #link together 4 grains. should do in a loop next
         dta_out = np.empty(shape = (0,0))
         
         for i in range(2): #going higher here prevents drawing of the GUI
@@ -471,6 +494,23 @@ def graintrigger(
             #print(i)
         dta = dta_out
         grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+        
+    if single  == 3: #this is the mix mode. One grain from each sample.
+        dta_out = np.empty(shape = (0,0))
+        
+        for i in range(1): #going higher here prevents drawing of the GUI
+            update_playhead()
+            dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+            dta_out = np.append(dta_out,FX(dta,1,True))
+            
+            dta = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+            dta_out = np.append(dta_out,FX(dta,1,True))
+            
+            
+            #print(i)
+        dta = dta_out
+        grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+        
         
     # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
     # dta = cube_softclip(dta, 1)
@@ -515,6 +555,7 @@ def GUI():
         global LFO1  # only for debugging
         global im1
         global playhead_position
+        global playhead_position_second
         global newsample
         global grain_length_samples
         global grain_waittime_ms
@@ -528,8 +569,8 @@ def GUI():
         # leftmost is 5 rightmost is 300
         Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
         Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
-        #Left_Limiter_Pos2 = 315 + round(Left_Limit2 / len_data_second * (300 - 5))
-        #Right_Limiter_Pos2 = 315 + round(Right_Limit2 / len_data_second * (300 - 5))
+        #Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
+        #Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
         
         newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
         newd.text(Right_Limiter_Pos, 20, "|", color="white")
@@ -570,35 +611,16 @@ def GUI():
 
         # picture is 302 x 74 at position 318, 30
         # draws a picture of the waveform
-        if newsample:
-            my_monitors_dpi = 96
-            plt.figure(
-                figsize=(370 / my_monitors_dpi, 74 / my_monitors_dpi),  # 370
-                dpi=my_monitors_dpi,
-            )  # need to change DPI value here for the small monitor
-            plt.axis("off")
-            plt.xlim([0, len_data])
-            plt.plot(data, color="black")
-            plt.savefig(fname="AudioA.png", bbox_inches="tight", transparent=True)  #
-            plt.close()
-            plt.figure(
-                figsize=(370 / my_monitors_dpi, 74 / my_monitors_dpi),  # 370
-                dpi=my_monitors_dpi,
-            )  # need to change DPI value here for the small monitor
-            plt.axis("off")
-            plt.xlim([0, len_data_second])
-            plt.plot(data, color="black")
-            plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
-            plt.close()           
-            
-            newsample = False
 
         newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
         newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
         # playhead position
         xposA = (300 - 5) / len_data * playhead_position + 5
-
         newd.line(xposA, 40, xposA, 90, color="red")
+
+        xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
+        newd.line(xposA2, 40, xposA2, 90, color="red")
+
 
         # these two below here only need to be updated when the GUI value changes anyway
         grain_length_samples = round(
@@ -617,12 +639,14 @@ def mainfunc():
     global chosensample
     if filebrowsing:
         reversegrain = False
-        filebrowser(chosensample) #chosensample contains 1 or 2 for A or B
+        filebrowser() #chosensample contains 1 or 2 for A or B
     else:
         global dta
         global playhead_position
+        global playhead_position_second
         global changed
         global playhead_reversed
+        global playhead_reversed_second
         global names
         global sample1
         global sample2
@@ -649,8 +673,9 @@ def mainfunc():
         global Right_Limit
         global Left_Limit
         global loop_jitter
+        global Right_Limit_second
+        global Left_Limit_second
         
-
         if oldselector != selector:  # if the selector changed reset the counters
             counter_two = 0
             counter_three = 0
@@ -811,19 +836,19 @@ def mainfunc():
         elif selector == 10:
             im1 = "GUI_perform_480_B_Soundfile.png"
             
-            Left_Limit2 = int(Left_Limit2 + counter_two * 4 * len_data_second / 100)
-            Right_Limit2 = int(Right_Limit2 + counter_three * 4 * len_data_second / 100)
+            Left_Limit_second = int(Left_Limit_second + counter_two * 4 * len_data_second / 100)
+            Right_Limit_second = int(Right_Limit_second + counter_three * 4 * len_data_second / 100)
 
-            if Left_Limit2 < 1:
-                Left_Limit2 = 1
-            if Right_Limit2 > len_data_second:
-                Right_Limit2 = len_data_second
+            if Left_Limit_second < 1:
+                Left_Limit_second = 1
+            if Right_Limit_second > len_data_second:
+                Right_Limit_second = len_data_second
             if (
-                Left_Limit2 > Right_Limit2
+                Left_Limit_second > Right_Limit_second
             ):  # if left and right cross, just swap the values
-                holder = Right_Limit2
-                Right_Limit2 = Left_Limit2
-                Left_Limit2 = holder
+                holder = Right_Limit_second
+                Right_Limit_second = Left_Limit_second
+                Left_Limit_second = holder
 
 
         elif selector == 11:
@@ -880,9 +905,11 @@ def mainfunc():
 
 def update_playhead():
     global playhead_position
+    global playhead_position_second
     global speed_jitter
     global playhead_speed
     global playhead_reversed
+    global playhead_reversed_second
 
     # pygame.time.wait(pausetime1)
     if not (playhead_reversed):
@@ -902,6 +929,24 @@ def update_playhead():
     if playhead_position < Left_Limit:
         playhead_position = grain_length_samples + Left_Limit
         playhead_reversed = False
+        print("playhead forward")
+# second sample
+    if not (playhead_reversed_second):
+        playhead_position_second = int(
+            playhead_position_second + playhead_speed + speed_jitter * (random.random())
+        )
+    else:
+        playhead_position_second = int(
+            playhead_position_second - playhead_speed - speed_jitter * (random.random())
+        )
+
+    if playhead_position_second > Right_Limit:
+        playhead_position_second = Right_Limit - grain_length_samples
+        playhead_reversed_second = True
+        print("playhead reverse")
+    if playhead_position_second < Left_Limit:
+        playhead_position_second = grain_length_samples + Left_Limit
+        playhead_reversed_second = False
         print("playhead forward")
 
 
@@ -1068,6 +1113,7 @@ length_jitter = 0.1  # fold of original grain length
 playhead_reversed = (
     False  # initial direction the playhead takes to trigger the samples.
 )
+playhead_reversed_second = False
 soundloop_times = 0  # this repeats a given grain exactly after it is played for n times. 1 means repeated once.
 ## initialize the three LFOs
 LFO1_type = 1  # sine
@@ -1082,6 +1128,9 @@ LFO3_parameter2 = 0.3
 LFO4_parameter2 = 0.4
 Right_Limit = len(data)  # pretty random number to initialize
 Left_Limit = 1
+Right_Limit_second = len(data_second)  # pretty random number to initialize
+Left_Limit_second = 1
+
 envtype = 1
 Volume1 = 1.0
 Volume2 = 1.0
@@ -1111,7 +1160,7 @@ grain_waittime_ms = (
 )  # how long to wait after one grain is triggered
 currentgrain = 1  # which grain is currently supposed to be triggered
 playhead_position = 0  # position of the playhead in samples
-
+playhead_position_second = 0
 ## the constant sample (played as two channels to overlap a bit)
 
 ### SAMPLE PLAYER
