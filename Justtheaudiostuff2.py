@@ -336,8 +336,22 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
     global grain_length_ms
     global soundloop_times
     global Pitch1
+# 
+#     # print(".")
+# 
+#     if Pitch1 != 1:
+#         dta = pitchshift(dta, Pitch1)
+# 
+#     ##reverse
+    if reversegrain:
+        dta = reverse(dta)
 
-    # print(".")
+#     if True:  # speed change
+#         dta = speed_down(dta, random.randrange(1, 6))
+# 
+    if smooth:  # might want to be able to turn smoothing off
+        dta = smoothen(dta)
+    
 
     if envtype == 1:  # hann envelope
         dta = env_hann(dta)
@@ -345,19 +359,7 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
         dta = env_decay(dta)
     elif envtype == 3:  # exp envelope
         dta = env_exp(dta)
-
-    if Pitch1 != 1:
-        dta = pitchshift(dta, Pitch1)
-
-    ##reverse
-    if reversegrain:
-        dta = reverse(dta)
-
-    if True:  # speed change
-        dta = speed_down(dta, random.randrange(1, 6))
-
-    if smooth:  # might want to be able to turn smoothing off
-        dta = smoothen(dta)
+    
     return(dta)
 
 def play_ready_deprec(dta):
@@ -373,23 +375,25 @@ def next_grain(
 ):  # extract the next grain from full sample "data".
     global grain_length_samples
     global Fs
+    while True: #repeat until we have a non-zero sized grain
+        sample_length = grain_length_samples
+        jitter = int(sample_length * playhead_jitter * ((0.5 - random.random())))
+        ex_position = playhead_position + jitter
 
-    sample_length = grain_length_samples
-    jitter = int(sample_length * playhead_jitter * ((0.5 - random.random())))
-    ex_position = playhead_position + jitter
-
-    if ex_position > (len_data - grain_length_samples - 1):
-        ex_position = len_data + (sample_length - ex_position)
-    if ex_position < 0:
-        ex_position = abs(ex_position)
-    endposition = (
-        ex_position
-        + grain_length_samples
-        + int(grain_length_samples * length_jitter * (0.5 - float(random.random())))
-    )
-    extracted = data[ex_position:endposition]
-    grain_length_samples = len(extracted)
-
+        if ex_position > (len_data - grain_length_samples - 1):
+            ex_position = len_data + (sample_length - ex_position)
+        if ex_position < 0:
+            ex_position = abs(ex_position)
+        endposition = (
+            ex_position
+            + grain_length_samples
+            + int(grain_length_samples * length_jitter * (0.5 - float(random.random())))
+        )
+        extracted = data[ex_position:endposition]
+        grain_length_samples = len(extracted)
+        if grain_length_samples > 0:
+            break
+    
     # make a little dot at grainpos
     xposA1 = (300 - 5) / len_data * ex_position + 5
     newd.text(xposA1, 65, "|", color="white")
@@ -477,12 +481,15 @@ def graintrigger(
     pdata,
 ):  # this now allows to change up the datafile to pick the grain from
     global grain1
+    global graincounter
+    global dta_out
     
     single = 3 #single would be the regular mode
     if single == 1:
         update_playhead()
         dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
         grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
+        graincounter = grain_release
 
     if single ==2: #link together 4 grains. should do in a loop next
         dta_out = np.empty(shape = (0,0))
@@ -494,46 +501,67 @@ def graintrigger(
             #print(i)
         dta = dta_out
         grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+        graincounter = grain_release
         
     if single  == 3: #this is the mix mode. One grain from each sample.
-        dta_out = np.empty(shape = (0,0))
+        if graincounter == 0:
+            dta_out = np.empty(shape = (0,0))
         
-        for i in range(1): #going higher here prevents drawing of the GUI
+        for i in range(3): #going higher here prevents drawing of the GUI
             update_playhead()
-            dta = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-            dta_out = np.append(dta_out,FX(dta,1,True))
+            graincounter += 1
+            dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+            dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+            l1 = len(dta1)
+            l2 = len(dta2)
+            diffr = abs(l1-l2)
+            if (l1 > l2):
+                dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
+            if (l2 > l1):
+                dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
+                              
             
-            dta = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+            dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
             dta_out = np.append(dta_out,FX(dta,1,True))
             
             
             #print(i)
         dta = dta_out
-        grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
         
-        
-    # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
-    # dta = cube_softclip(dta, 1)
-    
-    # volume control grain 1
-    volume_correction_factor = 0.06  # volume of 1 is ususally too loud for headphones
+        if graincounter >= grain_release: #play when the file is long enough
+            print(len(dta))
+            grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+            graincounter = 0  # reset the counter
+                
+                
+            # dta = speed_down(data, 12+round(LFO1*10)) #get some pitch variation with the LFO (just a test)
+            # dta = cube_softclip(dta, 1)
+            
+            # volume control grain 1
+            volume_correction_factor = 0.06  # volume of 1 is ususally too loud for headphones
 
-    calcvolume = volume_correction_factor * Volume1 + volume1_jitter * (
-        0.5 - random.random()
-    )  # add the jitter.
-    if calcvolume > 1:
-        calcvolume = 1
-    if calcvolume < 0.01:
-        calcvolume = 0.01
-    grain1.set_volume(calcvolume)  # set the volume
-    ## end of volume control
+            calcvolume = volume_correction_factor * Volume1 + volume1_jitter * (
+                0.5 - random.random()
+            )  # add the jitter.
+            if calcvolume > 1:
+                calcvolume = 1
+            if calcvolume < 0.01:
+                calcvolume = 0.01
+            grain1.set_volume(calcvolume)  # set the volume
+            ## end of volume control
 
-    if loop_jitter > 0:
-        rnd = random.randrange(loop_jitter)
-    else:
-        rnd = 0
-    pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
-    # pygame.time.wait(pausetime1)
+            if loop_jitter > 0:
+                rnd = random.randrange(loop_jitter)
+            else:
+                rnd = 0
+            pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
+            # pygame.time.wait(pausetime1)
+
+def normalize(dta):
+    print(len(dta))
+    #out = np.interp(dta,(np.min(dta, axis = 0), np.max(dta, axis = 0)),(-32767,32767))
+    #this doesn't work yet
+    return(dta) #do nothing for now
 
 
 def GUI():
@@ -950,6 +978,8 @@ def update_playhead():
         print("playhead forward")
 
 
+graincounter = 0 #this counts how many grains have been added to the new array yet.
+grain_release = 30 #how many grains are in each cloud before it plays
 chosensample = 0 #initialize
 
 ## GPIO configuration for rotary encoders.
@@ -1103,10 +1133,10 @@ data_backup_second = data_second
 
 # data = reverse(data)
 reversegrain = False  # should the grain be reversed
-grain_length_ms = 250.0  # in milliseconds (global)
+grain_length_ms = 120.0  # in milliseconds (global)
 grains_per_second = 4.0  # how many grains are triggered per second
 number_of_grains = 4  # how many grain channels are there (for pygame)
-playhead_speed = 500  # playhead movement in samples per second
+playhead_speed = 250  # playhead movement in samples per second
 speed_jitter = 0
 playhead_jitter = 0.2  # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
 length_jitter = 0.1  # fold of original grain length
@@ -1144,6 +1174,9 @@ volume2_jitter = 0
 pitch1_jitter = 0
 loop_jitter = 0
 ##
+dta_out = np.empty(shape = (0,0)) #the grain target file
+#
+
 newsample = True  # just for testing the drawing of the wavefile
 selector = 0  # this sets which part of the GUI is highlighted.
 filebrowser_selected = 0  # which file is selected
