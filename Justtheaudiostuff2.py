@@ -495,7 +495,7 @@ def graintrigger(
     global dta_out
     global envtype
     
-    mode = 4 #single would be the regular mode
+    mode = 1 #single would be the regular mode
     
     if mode == 1:
         update_playhead()
@@ -629,9 +629,9 @@ def graintrigger(
             # pygame.time.wait(pausetime1)
 
 def normalize(dta):
-    print(len(dta))
-    #out = np.interp(dta,(np.min(dta, axis = 0), np.max(dta, axis = 0)),(-32767,32767))
-    #this doesn't work yet
+
+    dta = (2 ** (16 - 4)) * dta / dta.max()  # normalize (16bit)
+  
     return(dta) #do nothing for now
 
 
