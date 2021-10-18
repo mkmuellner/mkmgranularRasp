@@ -94,10 +94,10 @@ def turned_rotary_callback(channel):  # interrupt called
             counter_four += 1
         else:
             counter_four -= 1
-    print(f"one: {selector}")
-    print(f"two: {counter_two}")
-    print(f"three: {counter_three}")
-    print(f"four: {counter_four}")
+    # print(f"one: {selector}")
+    # print(f"two: {counter_two}")
+    # print(f"three: {counter_three}")
+    # print(f"four: {counter_four}")
 
 
 def filebrowser():
@@ -235,9 +235,14 @@ def loadsamples():  # load a new sample 1 or 2
     plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
     plt.close()   
 
-def smoothen(dta,size = 4):  # reduce the harshness by running a simple running average as a lowpass filter
+def smoothen(dta,size = 5,times = 2):  # reduce the harshness by running a simple running average as a lowpass filter
     # I can use the same function as a filter (low pass)
-    return uniform_filter1d(dta, size)  # size gives the amount of smoothing
+    ret = dta
+    
+    for i in range(times):
+        ret = uniform_filter1d(ret, size)
+    
+    return ret  # size gives the amount of smoothing
 
 
 def speed_up(dta, shift):  # make the sound play faster (and higher in pitch)
@@ -490,7 +495,8 @@ def graintrigger(
     global dta_out
     global envtype
     
-    mode = 3 #single would be the regular mode
+    mode = 4 #single would be the regular mode
+    
     if mode == 1:
         update_playhead()
         dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
@@ -530,59 +536,64 @@ def graintrigger(
             dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
             dta_out = np.append(dta_out,FX(dta,envtype,True))
             
-        if mode  == 4: #this is the mix mode. One grain from each sample.
-            if graincounter == 0:
-                dta_out = np.empty(shape = (0,0))
+    if mode  == 4: #this is the mix mode. One grain from each sample.
+        
+        if graincounter == 0:
+            dta_out = np.empty(shape = (0,0))
+        
+        for i in range(3): #going higher here prevents drawing of the GUI
+            update_playhead()
+            graincounter += 1
+            dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+            dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+            l1 = len(dta1)
+            l2 = len(dta2)
+            diffr = abs(l1-l2)
+            if (l1 > l2):
+                dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
+            if (l2 > l1):
+                dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
             
-            for i in range(1): #going higher here prevents drawing of the GUI
-                update_playhead()
-                graincounter += 1
-                dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-                dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
-                l1 = len(dta1)
-                l2 = len(dta2)
-                diffr = abs(l1-l2)
-                if (l1 > l2):
-                    dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
-                if (l2 > l1):
-                    dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
+            dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
+            
+            
+            if len(dta_out) != 0: #as long as this isn't the first grain
+                #not take half of data and crossfade
+                dta_length = len(dta)
+                fadelength = int(len(dta)/2)
                 
-                dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
+                out_length = len (dta_out)
                 
+                dta = FX(dta,envtype, True)
                 
-                if len(dta_out) != 0: #as long as this isn't the first grain
-                    #not take half of data and crossfade
-                    dta_length = len(dta)
-                    fadelength = int(len(dta)/2)
-                    
-                    out_length = len (dta_out)
-                    
-                    dta = FX(dta,envtype, True)
-                    
-                    cross_dta = dta[0:fadelength-1]
-                    rest_dta = dta[fadelength:]
-                    
+                cross_dta = dta[0:fadelength]
+                rest_dta = dta[fadelength+1:]
+                
 
-                    
-                    
-                    rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
-                    
-                    #blend the other bit
-                    cross_dta_out = dta_out[fadelength:out_length]
-                    blended = 0.5*cross_dta_out + 0.5*cross_dta
-                    
-                    print(f"dta_out:{len(dta_out)}")
-                    print(f"dta:{len(dta)}")
-                    print(f"cross_dta:{len(cross_dta)}")
-                    print(f"rest_dta:{len(rest_dta)}")
-                    
-                    dta_out = np.concatenate(rest_dta_out, blended)
-                    dta_out = np.concatenate(dta_out, rest_dta)
-                    
-                    print(f"dta_out:{len(dta_out)}")
-                else:
-                    dta_out = np.append(dta_out,FX(dta,envtype,True))
-  
+                
+                
+                rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+                
+                #blend the other bit
+                cross_dta_out = dta_out[out_length-fadelength:]
+
+                # print(f"dta_out:{len(dta_out)}")
+                # print(f"dta:{len(dta)}")
+                
+                # print(f"rest_dta:{len(rest_dta)}")
+                # print(f"cross_dta:{len(cross_dta)}")
+                # print(f"cross_dta_out:{len(cross_dta_out)}")
+
+                blended = 0.5*cross_dta_out + 0.5*cross_dta
+                
+                dta_out = np.append(rest_dta_out, blended)
+                dta_out = np.append(dta_out, rest_dta)
+                
+                #print(f"dta_out:{len(dta_out)}")
+            
+            else:
+                dta_out = np.append(dta_out,FX(dta,envtype,True))
+
       
       
             #print(i)
@@ -997,7 +1008,22 @@ def mainfunc():
         # while True: #Grain generation
         updateLFO()
         # begin_time = datetime.datetime.now()
+        
+        #t_on()
         graintrigger(data)
+        #t_off()
+        #4 runs 7,000 - 18,000 ns
+        #3 runs 3 - 12 ms
+        
+        
+
+def t_on(): #start the timer
+    global before
+    before = time.time()*1000
+    
+def t_off(): #end the timer
+    global before
+    print(f"exec time (ms):{time.time()*1000-before}")
 
 
 def update_playhead():
@@ -1046,7 +1072,7 @@ def update_playhead():
         playhead_reversed_second = False
         print("playhead forward")
 
-
+before = 0 #initialize the global timer variable
 graincounter = 0 #this counts how many grains have been added to the new array yet.
 grain_release = 5 #how many grains are in each cloud before it plays
 chosensample = 0 #initialize
