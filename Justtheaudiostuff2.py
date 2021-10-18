@@ -1,3 +1,5 @@
+#I should make sure all samples are 22000 Hz sample rate
+
 ## this is the raspberry specific version
 import os
 import sys
@@ -254,7 +256,7 @@ def speed_down(
 
 def decfun(x):
     y = 2 ** (
-        (-0.01 * 1 / (grain_length_ms / 100)) * x
+        (-0.01 * 1 / (grain_length_ms / 10)) * x
     )  # the grain lethgth divided by 100 kinda works out
     return y
 
@@ -296,12 +298,7 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
 
     # print(".")
 
-    if envtype == 1:  # hann envelope
-        dta = env_hann(dta)
-    elif envtype == 2:  # decay 1/x envelope
-        dta = env_decay(dta)
-    elif envtype == 3:  # exp envelope
-        dta = env_exp(dta)
+
 
     if Pitch1 != 1:
         dta = pitchshift(dta, Pitch1)
@@ -322,6 +319,13 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
         else:
             dta = smoothen(dta,2)
 
+    if envtype == 1:  # hann envelope
+        dta = env_hann(dta)
+    elif envtype == 2:  # decay 1/x envelope
+        dta = env_decay(dta)
+    elif envtype == 3:  # exp envelope
+        dta = env_exp(dta)
+    
     dta = np.vstack(
         (dta, dta)
     ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
@@ -329,6 +333,7 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
     sounddata = dta.tobytes()  # convert to buffer (sound data)
     # doesn't actually seem to make much of a difference
     # compared to just running a single call to pygame.Mixer.Sound.play with a single sound.
+    
     return sounddata
 
 def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready function
@@ -395,8 +400,8 @@ def next_grain(
             break
     
     # make a little dot at grainpos
-    xposA1 = (300 - 5) / len_data * ex_position + 5
-    newd.text(xposA1, 65, "|", color="white")
+    #xposA1 = (300 - 5) / len_data * ex_position + 5
+    #newd.text(xposA1, 65, "|", color="white")
     #    newd.line(xposA, 60, xposA, 70, color="lightred")
     return extracted
 
@@ -483,15 +488,16 @@ def graintrigger(
     global grain1
     global graincounter
     global dta_out
+    global envtype
     
-    single = 3 #single would be the regular mode
-    if single == 1:
+    mode = 3 #single would be the regular mode
+    if mode == 1:
         update_playhead()
         dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
         grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
         graincounter = grain_release
 
-    if single ==2: #link together 4 grains. should do in a loop next
+    if mode ==2: #link together 4 grains. should do in a loop next
         dta_out = np.empty(shape = (0,0))
         
         for i in range(2): #going higher here prevents drawing of the GUI
@@ -503,7 +509,7 @@ def graintrigger(
         grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
         graincounter = grain_release
         
-    if single  == 3: #this is the mix mode. One grain from each sample.
+    if mode  == 3: #this is the mix mode. One grain from each sample.
         if graincounter == 0:
             dta_out = np.empty(shape = (0,0))
         
@@ -522,14 +528,68 @@ def graintrigger(
                               
             
             dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
-            dta_out = np.append(dta_out,FX(dta,1,True))
+            dta_out = np.append(dta_out,FX(dta,envtype,True))
             
+        if mode  == 4: #this is the mix mode. One grain from each sample.
+            if graincounter == 0:
+                dta_out = np.empty(shape = (0,0))
             
+            for i in range(1): #going higher here prevents drawing of the GUI
+                update_playhead()
+                graincounter += 1
+                dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
+                dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+                l1 = len(dta1)
+                l2 = len(dta2)
+                diffr = abs(l1-l2)
+                if (l1 > l2):
+                    dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
+                if (l2 > l1):
+                    dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
+                
+                dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
+                
+                
+                if len(dta_out) != 0: #as long as this isn't the first grain
+                    #not take half of data and crossfade
+                    dta_length = len(dta)
+                    fadelength = int(len(dta)/2)
+                    
+                    out_length = len (dta_out)
+                    
+                    dta = FX(dta,envtype, True)
+                    
+                    cross_dta = dta[0:fadelength-1]
+                    rest_dta = dta[fadelength:]
+                    
+
+                    
+                    
+                    rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+                    
+                    #blend the other bit
+                    cross_dta_out = dta_out[fadelength:out_length]
+                    blended = 0.5*cross_dta_out + 0.5*cross_dta
+                    
+                    print(f"dta_out:{len(dta_out)}")
+                    print(f"dta:{len(dta)}")
+                    print(f"cross_dta:{len(cross_dta)}")
+                    print(f"rest_dta:{len(rest_dta)}")
+                    
+                    dta_out = np.concatenate(rest_dta_out, blended)
+                    dta_out = np.concatenate(dta_out, rest_dta)
+                    
+                    print(f"dta_out:{len(dta_out)}")
+                else:
+                    dta_out = np.append(dta_out,FX(dta,envtype,True))
+  
+      
+      
             #print(i)
         dta = dta_out
         
         if graincounter >= grain_release: #play when the file is long enough
-            print(len(dta))
+            #print(len(dta))
             grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
             graincounter = 0  # reset the counter
                 
@@ -703,6 +763,8 @@ def mainfunc():
         global loop_jitter
         global Right_Limit_second
         global Left_Limit_second
+        global A_manual
+        global playhead_speed_mult
         
         if oldselector != selector:  # if the selector changed reset the counters
             counter_two = 0
@@ -777,7 +839,7 @@ def mainfunc():
             im1 = "GUI_perform_480_A_grainsize.png"
 
             # changing grainsize
-            grain_length_ms = grain_length_ms + (counter_two * 5)
+            grain_length_ms = grain_length_ms + (counter_two * 20)
             if grain_length_ms > 1000:
                 grain_length_ms = 1000
 
@@ -896,7 +958,14 @@ def mainfunc():
             if selector == 10:
                 filebrowsing = True
                 chosensample = 2
-
+            if selector == 1:
+                A_manual = not(A_manual)
+                
+        if A_manual == True:
+            playhead_speed_mult = 0
+        if A_manual == False:
+            playhead_speed_mult = 1
+            
         # reset things again
         counter_two = 0
         counter_three = 0
@@ -943,11 +1012,11 @@ def update_playhead():
     if not (playhead_reversed):
 
         playhead_position = int(
-            playhead_position + playhead_speed + speed_jitter * (random.random())
+            playhead_position + playhead_speed*playhead_speed_mult + speed_jitter * (random.random())
         )
     else:
         playhead_position = int(
-            playhead_position - playhead_speed - speed_jitter * (random.random())
+            playhead_position - playhead_speed*playhead_speed_mult - speed_jitter * (random.random())
         )
 
     if playhead_position > Right_Limit:
@@ -979,9 +1048,9 @@ def update_playhead():
 
 
 graincounter = 0 #this counts how many grains have been added to the new array yet.
-grain_release = 30 #how many grains are in each cloud before it plays
+grain_release = 5 #how many grains are in each cloud before it plays
 chosensample = 0 #initialize
-
+A_manual = False
 ## GPIO configuration for rotary encoders.
 GPIO.setmode(GPIO.BCM)
 
@@ -1082,7 +1151,7 @@ print(names)  # print the names of the input devices. the first one will be used
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
-sample1 = "NI_Grains-31.wav"
+sample1 = "NI_Grains-31.wav" #this is detected as being sample rate 48khz!!
 sample2 = "NI_Fairlight_Samples-34.wav"
 
 # read the wave file and give some stats about it
@@ -1093,7 +1162,7 @@ Fs_second, data_second = read(sample2)
 channels = 12
 # pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
 pygame.mixer.pre_init(
-    buffer=1024, frequency=Fs, channels=channels
+    buffer=1024, frequency=22000, channels=channels #consider playing around with the sample rate here
 )  # lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
@@ -1230,7 +1299,7 @@ filebrowsing = False
 signal.signal(signal.SIGINT, signal_handler)
 
 
-dummy.repeat(150, GUI)  # update the GUI every 300ms
+dummy.repeat(1000, GUI)  # update the GUI every 300ms setting this value makes a big difference
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 # dummy.repeat(1, update_rotaries)
