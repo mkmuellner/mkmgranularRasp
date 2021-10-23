@@ -19,7 +19,6 @@ import datetime
 import math
 from scipy.ndimage.filters import uniform_filter1d
 
-
 # import tkinter as tk
 
 GPIObuffer = []
@@ -186,6 +185,7 @@ def filebrowser():
             global newsample
             newsample = True
             print("switching")
+        GUIneedsUpdate = False #
 
 
 def loadsamples():  # load a new sample 1 or 2
@@ -381,17 +381,29 @@ def play_ready_deprec(dta):
     return sounddata
 
 def next_grain(
-    data, playhead_position, playhead_jitter, length_jitter
+    data_select, playhead_position, playhead_jitter, length_jitter
 ):  # extract the next grain from full sample "data".
     global grain_length_samples
     global Fs
+    global data
+    global data_second
+        
     while True: #repeat until we have a non-zero sized grain
-        sample_length = grain_length_samples
+        if data_select == 1:
+            dataex = data
+            sample_length = grain_length_samples
+            lgth = len_data
+        if data_select == 2:
+            dataex = data_second
+            sample_length = grain_length_samples
+            lgth = len_data_second
+        
         jitter = int(sample_length * playhead_jitter * ((0.5 - random.random())))
+        
         ex_position = playhead_position + jitter
 
-        if ex_position > (len_data - grain_length_samples - 1):
-            ex_position = len_data + (sample_length - ex_position)
+        if ex_position > (lgth - grain_length_samples - 1):
+            ex_position = lgth + (sample_length - ex_position)
         if ex_position < 0:
             ex_position = abs(ex_position)
         endposition = (
@@ -399,8 +411,12 @@ def next_grain(
             + grain_length_samples
             + int(grain_length_samples * length_jitter * (0.5 - float(random.random())))
         )
-        extracted = data[ex_position:endposition]
+        extracted = dataex[ex_position:endposition]
+        
         grain_length_samples = len(extracted)
+        if grain_length_samples == 0:
+            print("!")
+        
         if grain_length_samples > 0:
             break
     
@@ -522,6 +538,7 @@ def mixgrains(dta1, dta2): #mixes two grains equally (unequal sizes allowed)
     if (l2 > l1):
         dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
     return((0.5*dta1) + (0.5*dta2)) #mix the grains together
+    #return(dta1) #debugging
 
 
 
@@ -603,11 +620,14 @@ def graintrigger(
         if graincounter == 0:
             dta_out = np.empty(shape = (0,0))
         
+        #debug:
+        #grain_release = 1
+        
         for i in range(3): #going higher here prevents drawing of the GUI
             update_playhead()
             graincounter += 1
-            dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
-            dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
+            dta1 = next_grain(1, playhead_position, playhead_jitter, length_jitter)
+            dta2 = next_grain(2, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
             
             dta = mixgrains(dta1, dta2)
             dta = crossfade(dta_out, dta, int(len(dta)/2))
@@ -644,7 +664,8 @@ def graintrigger(
                 
             if(pygame.mixer.find_channel() is not None): #if there is a channel available, don't stop one for playing.
                 pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
-            # pygame.time.wait(pausetime1)
+                print(len(dta))
+                #pygame.time.wait(100)
 
 def normalize(dta):
 
@@ -652,14 +673,15 @@ def normalize(dta):
   
     return(dta) #do nothing for now
 
-
-def GUI():
+def GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
+     
     global selector
     global filebrowsing
     global GUIneedsUpdate
+    #if True:
     if GUIneedsUpdate:
         if not (filebrowsing):
-            newd.clear()
+            #newd.clear() # clear does not seem to be necessary
             # use rotary one to select stuff
             selected = counter_one
             if counter_one > 14:
@@ -682,7 +704,7 @@ def GUI():
             global Right_Limit
             global Left_Limit
 
-            newd.image(0, 0, image=im1)
+            newd.image(0, 0, image=im1) #this seems to be somewhat slow
 
             # limiters
             # leftmost is 5 rightmost is 300
@@ -733,21 +755,26 @@ def GUI():
 
             newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
             newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
+            
+            #print(playhead_position)
+            #print(playhead_position_second)
             # mark playhead position
-            if mark_playhead == True:
-                xposA = (300 - 5) / len_data * playhead_position + 5
-                newd.line(xposA, 40, xposA, 90, color="red")
+            #if mark_playhead == True:
+            xposA = (300 - 5) / len_data * playhead_position + 5
+            newd.text(xposA, 65, "|", color = "red")
+           #newd.line(xposA, 40, xposA, 90, color="red")
 
-                xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
-                newd.line(xposA2, 40, xposA2, 90, color="red")
+            xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
+            newd.text(xposA2, 65, "|", color = "red")
+                #newd.line(xposA2, 40, xposA2, 90, color="red")
 
             # these two below here only need to be updated when the GUI value changes anyway
-            grain_length_samples = round(
-                grain_length_ms * (int(Fs) / 1000)
-            )  # grain length now in samples
-            grain_waittime_ms = (
-                1000.0 / grains_per_second
-            )  # how long to wait after one grain is triggered
+            #grain_length_samples = round(
+            #    grain_length_ms * (int(Fs) / 1000)
+            #)  # grain length now in samples
+            #grain_waittime_ms = (
+            #    1000.0 / grains_per_second
+            #)  # how long to wait after one grain is triggered
             
             GUIneedsUpdate = False #reset the update marker
 
@@ -1004,28 +1031,31 @@ def mainfunc():
         counter_three = 0
 
         oldselector = selector
+        
+        midi = False
+        
+        if midi:
+            for msg in port.iter_pending():
+                if (msg.type == "note_on") and not (changed):  # msg.note
+                    print(data)
+                    # data = speedx(data, msg.note)  # larger number more downtuning
 
-        for msg in port.iter_pending():
-            if (msg.type == "note_on") and not (changed):  # msg.note
-                print(data)
-                # data = speedx(data, msg.note)  # larger number more downtuning
+                    changed = True
+                if (
+                    msg.type == "note_off"
+                ):  # change pitch of constant sound only at note off
+                    changed = False
+                    # data_second = pitchshift(constant_sample, n = 2)
+                    constant_sample = pygame.mixer.Sound(
+                        play_ready(constant_sample, 0)
+                    )  # no envelope
+                    constant_sample.set_volume(0.05)
+                    pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
 
-                changed = True
-            if (
-                msg.type == "note_off"
-            ):  # change pitch of constant sound only at note off
-                changed = False
-                # data_second = pitchshift(constant_sample, n = 2)
-                constant_sample = pygame.mixer.Sound(
-                    play_ready(constant_sample, 0)
-                )  # no envelope
-                constant_sample.set_volume(0.05)
-                pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300)
-
-            if msg.type == "control_change":
-                print(msg.control)
-                print(msg.value)
-        # data = speedx(data2, 3)  # larger number more downtuning
+                if msg.type == "control_change":
+                    print(msg.control)
+                    print(msg.value)
+            # data = speedx(data2, 3)  # larger number more downtuning
 
         # while True: #Grain generation
         updateLFO()
@@ -1055,6 +1085,8 @@ def update_playhead():
     global playhead_speed
     global playhead_reversed
     global playhead_reversed_second
+    global playh_xposA
+    global playh_xposA2
 
     # pygame.time.wait(pausetime1)
     if not (playhead_reversed):
@@ -1070,11 +1102,12 @@ def update_playhead():
     if playhead_position > Right_Limit:
         playhead_position = Right_Limit - grain_length_samples
         playhead_reversed = True
-        print("playhead reverse")
+        #print("playhead reverse two")
     if playhead_position < Left_Limit:
         playhead_position = grain_length_samples + Left_Limit
         playhead_reversed = False
-        print("playhead forward")
+        #print("playhead forward two")
+        
 # second sample
     if not (playhead_reversed_second):
         playhead_position_second = int(
@@ -1085,22 +1118,31 @@ def update_playhead():
             playhead_position_second - playhead_speed - speed_jitter * (random.random())
         )
 
-    if playhead_position_second > Right_Limit:
-        playhead_position_second = Right_Limit - grain_length_samples
+    if playhead_position_second > Right_Limit_second:
+        playhead_position_second = Right_Limit_second - grain_length_samples
         playhead_reversed_second = True
-        print("playhead reverse")
-    if playhead_position_second < Left_Limit:
-        playhead_position_second = grain_length_samples + Left_Limit
+        #print("playhead reverse")
+    if playhead_position_second < Left_Limit_second:
+        playhead_position_second = grain_length_samples + Left_Limit_second
         playhead_reversed_second = False
-        print("playhead forward")
+        #print("playhead forward")
+        
 
+
+## config variables
+buffsz = 1024 #buffersize
 before = 0 #initialize the global timer variable
 graincounter = 0 #this counts how many grains have been added to the new array yet.
-grain_release = 2 #how many grains are in each cloud before it plays
+grain_release = 10 #how many grains are in each cloud before it plays
 chosensample = 0 #initialize
 A_manual = False
-mark_playhead = False # should the playhead be drawn as a red line on top of the waveform
+mark_playhead = True # should the playhead be drawn as a red line on top of the waveform
 GUIneedsUpdate = True #draw the GUI, then check if we need to update it.
+
+
+playh_xposA = 0
+playh_xposA2 = 0
+
 ## GPIO configuration for rotary encoders.
 GPIO.setmode(GPIO.BCM)
 
@@ -1209,13 +1251,14 @@ Fs, data = read(sample1)  # read the wave file
 Fs_second, data_second = read(sample2)
 
 ##initialize sound output via pygame
-channels = 12
+channels = 8
 # pygame.mixer.pre_init(buffer = 2048*16, frequency = Fs, channels = channels) #lower buffer gives more clicks
 pygame.mixer.pre_init(
-    buffer=1024, frequency=22000, channels=channels #consider playing around with the sample rate here
+    buffer=buffsz, frequency=22000, channels=channels #consider playing around with the sample rate here
 )  # lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
+
 
 ## apparently the below can also work
 # pygame.mixer.quit()
@@ -1252,13 +1295,13 @@ data_backup_second = data_second
 
 # data = reverse(data)
 reversegrain = False  # should the grain be reversed
-grain_length_ms = 120.0  # in milliseconds (global)
+grain_length_ms = 90.0  # in milliseconds (global)
 grains_per_second = 4.0  # how many grains are triggered per second
 number_of_grains = 4  # how many grain channels are there (for pygame)
 playhead_speed = 250  # playhead movement in samples per second
 speed_jitter = 0
-playhead_jitter = 0.2  # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
-length_jitter = 0.1  # fold of original grain length
+playhead_jitter = 0.0  # jitter around the playhead as a factor. 1,0 = 10% of full sample size 0 = no jitter.
+length_jitter = 0.0  # fold of original grain length
 playhead_reversed = (
     False  # initial direction the playhead takes to trigger the samples.
 )
@@ -1347,10 +1390,11 @@ dummy = Text(app, "")  # not sure this dummy procedure is really needed
 filebrowsing = False
 
 signal.signal(signal.SIGINT, signal_handler)
+loadsamples()
 
-
-dummy.repeat(300, GUI)  # update the GUI every 300ms setting this value makes a big difference
+dummy.repeat(1000, GUI)  # update the GUI every 300ms setting this value makes a big difference
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
+dummy.repeat(45, mainfunc)  #doing this twice seems to work as a workaround to prevent segmentation errors. I don't know why
 # dummy.repeat(1, update_rotaries)
 app.display()
