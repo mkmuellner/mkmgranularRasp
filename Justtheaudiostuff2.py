@@ -621,16 +621,16 @@ def graintrigger(
             dta_out = np.empty(shape = (0,0))
         
         #debug:
-        #grain_release = 1
+        grain_release = 10
         
-        for i in range(3): #going higher here prevents drawing of the GUI
+        for i in range(5): #going higher here prevents drawing of the GUI
             update_playhead()
             graincounter += 1
             dta1 = next_grain(1, playhead_position, playhead_jitter, length_jitter)
             dta2 = next_grain(2, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
             
             dta = mixgrains(dta1, dta2)
-            dta = crossfade(dta_out, dta, int(len(dta)/2))
+            dta_out = crossfade(dta_out, dta, int(len(dta)/2))
             
       
             #print(i)
@@ -663,9 +663,10 @@ def graintrigger(
                 rnd = 0
                 
             if(pygame.mixer.find_channel() is not None): #if there is a channel available, don't stop one for playing.
+                
                 pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
-                print(len(dta))
-                #pygame.time.wait(100)
+                
+                #pygame.time.wait(pausetime1)
 
 def normalize(dta):
 
