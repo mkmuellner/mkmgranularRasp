@@ -37,6 +37,7 @@ def button_pressed_callback(channel):  # interrupt called
     global twopressed
     global threepressed
     global fourpressed
+    global GUIneedsUpdate
 
     # reset everything. assume only one buttonpress is supposed to be recorded at a time
     onepressed = False
@@ -59,13 +60,14 @@ def button_pressed_callback(channel):  # interrupt called
     else:
         print("Not sure what was pressed. Got channel:")
         print(channel)
-
+    GUIneedsUpdate = True
 
 def turned_rotary_callback(channel):  # interrupt called
     global selector  # could also be using counter_one here instead
     global counter_two
     global counter_three
     global counter_four
+    global GUIneedsUpdate
 
     oneB = GPIO.input(Enc_oneB)
     twoB = GPIO.input(Enc_twoB)
@@ -94,6 +96,8 @@ def turned_rotary_callback(channel):  # interrupt called
             counter_four += 1
         else:
             counter_four -= 1
+            
+    GUIneedsUpdate = True
     # print(f"one: {selector}")
     # print(f"two: {counter_two}")
     # print(f"three: {counter_three}")
@@ -235,7 +239,7 @@ def loadsamples():  # load a new sample 1 or 2
     plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
     plt.close()   
 
-def smoothen(dta,size = 5,times = 2):  # reduce the harshness by running a simple running average as a lowpass filter
+def smoothen(dta,size = 5,times = 1):  # reduce the harshness by running a simple running average as a lowpass filter
     # I can use the same function as a filter (low pass)
     ret = dta
     
@@ -301,10 +305,6 @@ def play_ready(dta, envtype):  # all actions needed to play dta (as int16)
     global soundloop_times
     global Pitch1
 
-    # print(".")
-
-
-
     if Pitch1 != 1:
         dta = pitchshift(dta, Pitch1)
 
@@ -353,8 +353,8 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
 #         dta = pitchshift(dta, Pitch1)
 # 
 #     ##reverse
-    if reversegrain:
-        dta = reverse(dta)
+#    if reversegrain:
+#        dta = reverse(dta)
 
 #     if True:  # speed change
 #         dta = speed_down(dta, random.randrange(1, 6))
@@ -487,21 +487,83 @@ def pitchshift(
     return speedx(stretched[window_size:], factor)
 
 
+def crossfade(dta_out, dta, fadelength):
+    
+    if len(dta_out) != 0: #as long as this isn't the first grain
+        
+        #not take half of data and crossfade
+        dta_length = len(dta)
+        out_length = len (dta_out)
+        dta = FX(dta,envtype, True)
+        cross_dta = dta[0:fadelength]
+        rest_dta = dta[fadelength+1:]
+        rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+        
+        #blend the other bit
+        cross_dta_out = dta_out[out_length-fadelength:]
+
+        blended = 0.5*cross_dta_out + 0.5*cross_dta
+        
+        dta_out = np.append(rest_dta_out, blended)
+        dta_out = np.append(dta_out, rest_dta)
+        
+
+    else:
+        dta_out = np.append(dta_out,FX(dta,envtype,True))
+    return(dta_out)
+      
+
+def mixgrains(dta1, dta2): #mixes two grains equally (unequal sizes allowed)
+    l1 = len(dta1)
+    l2 = len(dta2)
+    diffr = abs(l1-l2)
+    if (l1 > l2):
+        dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
+    if (l2 > l1):
+        dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
+    return((0.5*dta1) + (0.5*dta2)) #mix the grains together
+
+
+
 def graintrigger(
-    pdata,
+    pdata
 ):  # this now allows to change up the datafile to pick the grain from
     global grain1
     global graincounter
     global dta_out
     global envtype
     
-    mode = 1 #single would be the regular mode
+    mode = 4 #
     
     if mode == 1:
         update_playhead()
         dta = next_grain(pdata, playhead_position, playhead_jitter, length_jitter)
-        grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
-        graincounter = grain_release
+        dta = FX(dta, 1, True)
+        grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+        
+        #experimental to test stuff:
+        #dta = np.vstack((dta, dta)).T  # duplicate processed channels to create a "pseudo stereo" one to play"
+        #dta = dta.astype("i2")  # convert data to 16 bit int format
+        
+        
+        ##// experimental
+        volume_correction_factor = 0.06  # volume of 1 is ususally too loud for headphones
+
+        calcvolume = volume_correction_factor * Volume1 + volume1_jitter * (
+            0.5 - random.random()
+        )  # add the jitter.
+        if calcvolume > 1:
+            calcvolume = 1
+        if calcvolume < 0.01:
+            calcvolume = 0.01
+        grain1.set_volume(calcvolume)  # set the volume
+        ## end of volume control
+
+        pygame.mixer.Sound.play(grain1, loops=0)
+        
+            
+        #grain1 = pygame.mixer.Sound(play_ready(dta, envtype))
+        #graincounter = grain_release
 
     if mode ==2: #link together 4 grains. should do in a loop next
         dta_out = np.empty(shape = (0,0))
@@ -515,7 +577,7 @@ def graintrigger(
         grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
         graincounter = grain_release
         
-    if mode  == 3: #this is the mix mode. One grain from each sample.
+    if mode  == 3: #this is the mix mode. One grain from each sample. does not seem to work right now
         if graincounter == 0:
             dta_out = np.empty(shape = (0,0))
         
@@ -536,7 +598,7 @@ def graintrigger(
             dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
             dta_out = np.append(dta_out,FX(dta,envtype,True))
             
-    if mode  == 4: #this is the mix mode. One grain from each sample.
+    if mode  == 4: #this is the mix mode. One grain from each sample and crossfaded into the previous
         
         if graincounter == 0:
             dta_out = np.empty(shape = (0,0))
@@ -546,58 +608,12 @@ def graintrigger(
             graincounter += 1
             dta1 = next_grain(data, playhead_position, playhead_jitter, length_jitter)
             dta2 = next_grain(data_second, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
-            l1 = len(dta1)
-            l2 = len(dta2)
-            diffr = abs(l1-l2)
-            if (l1 > l2):
-                dta2 = np.pad(dta2, (0,diffr)) #make the two grains equal length
-            if (l2 > l1):
-                dta1 = np.pad(dta1, (0,diffr)) #make the two grains equal length                              
             
-            dta = (0.5*dta1) + (0.5*dta2) #mix the grains together
+            dta = mixgrains(dta1, dta2)
+            dta = crossfade(dta_out, dta, int(len(dta)/2))
             
-            
-            if len(dta_out) != 0: #as long as this isn't the first grain
-                #not take half of data and crossfade
-                dta_length = len(dta)
-                fadelength = int(len(dta)/2)
-                
-                out_length = len (dta_out)
-                
-                dta = FX(dta,envtype, True)
-                
-                cross_dta = dta[0:fadelength]
-                rest_dta = dta[fadelength+1:]
-                
-
-                
-                
-                rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
-                
-                #blend the other bit
-                cross_dta_out = dta_out[out_length-fadelength:]
-
-                # print(f"dta_out:{len(dta_out)}")
-                # print(f"dta:{len(dta)}")
-                
-                # print(f"rest_dta:{len(rest_dta)}")
-                # print(f"cross_dta:{len(cross_dta)}")
-                # print(f"cross_dta_out:{len(cross_dta_out)}")
-
-                blended = 0.5*cross_dta_out + 0.5*cross_dta
-                
-                dta_out = np.append(rest_dta_out, blended)
-                dta_out = np.append(dta_out, rest_dta)
-                
-                #print(f"dta_out:{len(dta_out)}")
-            
-            else:
-                dta_out = np.append(dta_out,FX(dta,envtype,True))
-
-      
       
             #print(i)
-        dta = dta_out
         
         if graincounter >= grain_release: #play when the file is long enough
             #print(len(dta))
@@ -625,7 +641,9 @@ def graintrigger(
                 rnd = random.randrange(loop_jitter)
             else:
                 rnd = 0
-            pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
+                
+            if(pygame.mixer.find_channel() is not None): #if there is a channel available, don't stop one for playing.
+                pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
             # pygame.time.wait(pausetime1)
 
 def normalize(dta):
@@ -638,96 +656,100 @@ def normalize(dta):
 def GUI():
     global selector
     global filebrowsing
-    if not (filebrowsing):
-        newd.clear()
-        # use rotary one to select stuff
-        selected = counter_one
-        if counter_one > 14:
-            selector = 14
-        if counter_one < 0:
-            selector = 0
+    global GUIneedsUpdate
+    if GUIneedsUpdate:
+        if not (filebrowsing):
+            newd.clear()
+            # use rotary one to select stuff
+            selected = counter_one
+            if counter_one > 14:
+                selector = 14
+            if counter_one < 0:
+                selector = 0
 
-        global Volume1
-        global Pitch1
-        global Tuning1
-        global data_s16
-        global LFO1  # only for debugging
-        global im1
-        global playhead_position
-        global playhead_position_second
-        global newsample
-        global grain_length_samples
-        global grain_waittime_ms
-        global reversegrain
-        global Right_Limit
-        global Left_Limit
+            global Volume1
+            global Pitch1
+            global Tuning1
+            global data_s16
+            global LFO1  # only for debugging
+            global im1
+            global playhead_position
+            global playhead_position_second
+            global newsample
+            global grain_length_samples
+            global grain_waittime_ms
+            global reversegrain
+            global Right_Limit
+            global Left_Limit
 
-        newd.image(0, 0, image=im1)
+            newd.image(0, 0, image=im1)
 
-        # limiters
-        # leftmost is 5 rightmost is 300
-        Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
-        Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
-        #Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
-        #Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
-        
-        newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
-        newd.text(Right_Limiter_Pos, 20, "|", color="white")
-        
-        #newd.text(Left_Limiter_Pos2, 20, "|", color="white")  # y = 58 is center
-        #newd.text(Right_Limiter_Pos2, 20, "|", color="white")
+            # limiters
+            # leftmost is 5 rightmost is 300
+            Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
+            Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
+            #Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
+            #Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
+            
+            newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
+            newd.text(Right_Limiter_Pos, 20, "|", color="white")
+            
+            #newd.text(Left_Limiter_Pos2, 20, "|", color="white")  # y = 58 is center
+            #newd.text(Right_Limiter_Pos2, 20, "|", color="white")
 
-        newd.text(145, 127, "{:.2f}".format(Volume1))
-        newd.text(145, 127 + 26 * 1, "{:.2f}".format(Pitch1))
-        newd.text(145, 127 + 26 * 2 - 3, Tuning1)
-        newd.text(145, 127 + 26 * 3 + 18, round(grain_length_ms))
-        newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
-        newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
-        newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
-        newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, pausetime1)
+            newd.text(145, 127, "{:.2f}".format(Volume1))
+            newd.text(145, 127 + 26 * 1, "{:.2f}".format(Pitch1))
+            newd.text(145, 127 + 26 * 2 - 3, Tuning1)
+            newd.text(145, 127 + 26 * 3 + 18, round(grain_length_ms))
+            newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, pausetime1)
 
-        # left jitters
-        newd.text(145 + 100, 127, "{:.2f}".format(volume1_jitter))
-        newd.text(145 + 100, 127 + 26 * 1, "{:.2f}".format(pitch1_jitter))
-        newd.text(145 + 100, 127 + 26 * 3 + 18, "{:.2f}".format(length_jitter))
-        newd.text(
-            145 + 100, 127 + 26 * 3 + 18 + 24 * 2, "{:.2f}".format(playhead_jitter)
-        )
-        newd.text(145 + 100, 127 + 26 * 3 + 18 + 24 * 3, loop_jitter)
+            # left jitters
+            newd.text(145 + 100, 127, "{:.2f}".format(volume1_jitter))
+            newd.text(145 + 100, 127 + 26 * 1, "{:.2f}".format(pitch1_jitter))
+            newd.text(145 + 100, 127 + 26 * 3 + 18, "{:.2f}".format(length_jitter))
+            newd.text(
+                145 + 100, 127 + 26 * 3 + 18 + 24 * 2, "{:.2f}".format(playhead_jitter)
+            )
+            newd.text(145 + 100, 127 + 26 * 3 + 18 + 24 * 3, loop_jitter)
 
-        # LFO
-        newd.text(675, 75, "{:.2f}".format(LFO1_parameter1))
-        newd.text(675, 73 + 75, "{:.2f}".format(LFO2_parameter1))
-        newd.text(675, 70 + 75 * 2, "{:.2f}".format(LFO3_parameter1))
-        newd.text(675, 70 - 3 + 75 * 3, "{:.2f}".format(LFO4_parameter1))
+            # LFO
+            newd.text(675, 75, "{:.2f}".format(LFO1_parameter1))
+            newd.text(675, 73 + 75, "{:.2f}".format(LFO2_parameter1))
+            newd.text(675, 70 + 75 * 2, "{:.2f}".format(LFO3_parameter1))
+            newd.text(675, 70 - 3 + 75 * 3, "{:.2f}".format(LFO4_parameter1))
 
-        # flip on
-        # newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
-        if reversegrain:
-            newd.image(225, 179, image="FLIP_on.png")  # then flip it to off if needed.
-        else:
-            newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+            # flip on
+            # newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
+            if reversegrain:
+                newd.image(225, 179, image="FLIP_on.png")  # then flip it to off if needed.
+            else:
+                newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
 
-        # picture is 302 x 74 at position 318, 30
-        # draws a picture of the waveform
+            # picture is 302 x 74 at position 318, 30
+            # draws a picture of the waveform
 
-        newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
-        newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
-        # playhead position
-        xposA = (300 - 5) / len_data * playhead_position + 5
-        newd.line(xposA, 40, xposA, 90, color="red")
+            newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
+            newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
+            # mark playhead position
+            if mark_playhead == True:
+                xposA = (300 - 5) / len_data * playhead_position + 5
+                newd.line(xposA, 40, xposA, 90, color="red")
 
-        xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
-        newd.line(xposA2, 40, xposA2, 90, color="red")
+                xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
+                newd.line(xposA2, 40, xposA2, 90, color="red")
 
-
-        # these two below here only need to be updated when the GUI value changes anyway
-        grain_length_samples = round(
-            grain_length_ms * (int(Fs) / 1000)
-        )  # grain length now in samples
-        grain_waittime_ms = (
-            1000.0 / grains_per_second
-        )  # how long to wait after one grain is triggered
+            # these two below here only need to be updated when the GUI value changes anyway
+            grain_length_samples = round(
+                grain_length_ms * (int(Fs) / 1000)
+            )  # grain length now in samples
+            grain_waittime_ms = (
+                1000.0 / grains_per_second
+            )  # how long to wait after one grain is triggered
+            
+            GUIneedsUpdate = False #reset the update marker
 
 
 def mainfunc():
@@ -1074,9 +1096,11 @@ def update_playhead():
 
 before = 0 #initialize the global timer variable
 graincounter = 0 #this counts how many grains have been added to the new array yet.
-grain_release = 5 #how many grains are in each cloud before it plays
+grain_release = 2 #how many grains are in each cloud before it plays
 chosensample = 0 #initialize
 A_manual = False
+mark_playhead = False # should the playhead be drawn as a red line on top of the waveform
+GUIneedsUpdate = True #draw the GUI, then check if we need to update it.
 ## GPIO configuration for rotary encoders.
 GPIO.setmode(GPIO.BCM)
 
@@ -1325,7 +1349,7 @@ filebrowsing = False
 signal.signal(signal.SIGINT, signal_handler)
 
 
-dummy.repeat(1000, GUI)  # update the GUI every 300ms setting this value makes a big difference
+dummy.repeat(300, GUI)  # update the GUI every 300ms setting this value makes a big difference
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 # dummy.repeat(1, update_rotaries)
