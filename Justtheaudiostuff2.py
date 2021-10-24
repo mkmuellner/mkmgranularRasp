@@ -373,10 +373,8 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
 #        dta = reverse(dta)
 
     
-    if Pitch1 >1:
-        dta = speed_up(dta,int(abs(Pitch1)))
-    if Pitch1 <1:
-        dta = speed_down(dta,int(abs(Pitch1)))
+    if Pitch1 !=0:
+        dta = pitchshift(dta,Pitch1*100)
 # 
     if smooth:  # might want to be able to turn smoothing off
         dta = smoothen(dta)
@@ -394,6 +392,7 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
 def play_ready_deprec(dta):
     if normalize_on:
         dta = normalize(dta) #normalize the grain
+    print(f"max:{np.max(abs(dta))}")
     dta = np.vstack(
     (dta, dta)
     ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
@@ -516,17 +515,52 @@ def stretch(sound_array, f, window_size, h):  # Stretches the sound by a factor 
     return result.astype("int16")
 
 
-def pitchshift(
-    snd_array, n, window_size=2 ** 13, h=2 ** 11
-):  # """ Changes the pitch of a sound by ``n`` semitones. """
-    factor = 2 ** (1.0 * n / 12.0)
-    stretched = stretch(snd_array, 1.0 / factor, window_size, h)
-    return speedx(stretched[window_size:], factor)
+def saveplot(dta, filename):
+    my_monitors_dpi = 96
+    plt.figure(
+        figsize=(370 / my_monitors_dpi, 74 / my_monitors_dpi),  # 370
+        dpi=my_monitors_dpi,
+    )  # need to change DPI value here for the small monitor
+    plt.axis("off")
+    plt.xlim([0, len(dta)])
+    plt.plot(data, color="black")
+    plt.savefig(fname=filename, bbox_inches="tight", transparent=True)  #
+    plt.close()
+
+def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semitones. """
+    fr = 100 #frames to process at a time
+    sz = 22000//fr #22000 would be the rate. samplepoints to process per turn.
+    #print(f"sz:{sz}") #220
+    
+    c = int(len(dta)/sz) #frames that need to be processed. 220 samplepoints at a time
+    #print(f"c:{c}") #9
+    
+    shiftx = int(shift//fr) #shift 100 Hz
+    print(f"shiftx:{shiftx}") #3
+    
+    #saveplot(dta, "untransformed_grain.png")
+    combined = np.empty(shape = (0,0))
+    for num in range(c):
+        dtalet = dta[sz*num:(sz*(num+1))-1]
+        rf = np.fft.fft(dtalet)
+        rf = np.roll(rf, shiftx) #shift the frequencies by "shiftx"
+        
+        if shiftx > 0:
+            rf[0:shiftx] = 0 #overwrite the wrapped around frequencies with zeros.
+        if shiftx < 0:
+            rf[len(rf)-shiftx:] #for the other shift direction
+        
+        nr = np.fft.irfft(rf) #back from fourier transform
+        ns = np.ravel(nr)
+        combined = np.append(combined, ns)
+    #saveplot(combined, "combined_grain.png")
+    return (combined)
 
 
 def crossfade(dta_out, dta, fadelength):
-    
-    if len(dta_out) != 0: #as long as this isn't the first grain
+    if len(dta) == 0:
+        print("dta is zero")
+    if (len(dta_out) > 0): #as long as this isn't the first grain
         
         #not take half of data and crossfade
         dta_length = len(dta)
@@ -898,11 +932,11 @@ def mainfunc():
 
             # changing pitch
             # this does not work yet, anything other than 1 crashes
-            Pitch1 = Pitch1 + (counter_two)/4
-            if Pitch1 > 3:
-                Pitch1 = 3
-            if Pitch1 < -3:
-                Pitch1 = -3
+            Pitch1 = Pitch1 + (counter_two)
+            if Pitch1 > 10:
+                Pitch1 = 10
+            if Pitch1 < -10:
+                Pitch1 = -10
             pitch1_jitter = pitch1_jitter + counter_three/4
             if pitch1_jitter < 0:
                 pitch1_jitter = 0
@@ -1354,7 +1388,8 @@ Volume1 = 1.0
 Volume2 = 1.0
 Tuning1 = "C"
 Tuning2 = "C"
-Pitch1 = 1.0
+#Pitch1 = 1.0
+Pitch1 = 3.0
 Pitch2 = 1.0
 pausetime1 = 10
 volume1_jitter = 0
