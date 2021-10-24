@@ -239,7 +239,7 @@ def loadsamples():  # load a new sample 1 or 2
     plt.savefig(fname="AudioB.png", bbox_inches="tight", transparent=True)  #
     plt.close()   
 
-def smoothen(dta,size = 5,times = 1):  # reduce the harshness by running a simple running average as a lowpass filter
+def smoothen(dta,size = 20,times = 1):  # reduce the harshness by running a simple running average as a lowpass filter
     # I can use the same function as a filter (low pass)
     ret = dta
     
@@ -255,12 +255,12 @@ def speed_up(dta, shift):  # make the sound play faster (and higher in pitch)
 
 
 def speed_down(
-    dta, shift
+    dta, shift=10
 ):  # slows down the audio by just duplicating data. could anti-alias by shifting a copy and then averaging?
-    dta = np.repeat(dta, 3)  # triple the datapoints
-    return np.delete(
-        dta, np.arange(0, dta.size, shift)
-    )  # and now remove some again to get the pitch.
+    dta = np.repeat(dta, 10)  # triple the datapoints
+    dta = np.delete(dta, np.arange(0, dta.size, shift))  # and now remove some again to get the pitch.
+    dta = smoothen(dta,30,1)
+    return dta
 
 
 def decfun(x):
@@ -268,6 +268,22 @@ def decfun(x):
         (-0.01 * 1 / (grain_length_ms / 10)) * x
     )  # the grain lethgth divided by 100 kinda works out
     return y
+
+def fillfadefunc(leng):
+    global fadefunc
+    for i in range(leng-1):
+        fadefunc = np.append(fadefunc, 1/(i+1))
+
+    
+
+
+def env_fadein_out(dta):
+    global fadefunc
+    dtalength = len(dta)
+    fadelength = len(fadefunc)
+    dta = dta * np.pad(fadefunc,(0,dtalength-fadelength), 'constant', constant_values = (0,1)) #fadein and 1's
+    dta = dta * np.pad(np.flipud(fadefunc),(dtalength-fadelength,0), 'constant', constant_values = (1,0)) #fadein and 1's
+    return(dta)
 
 
 def env_hann(dta):
@@ -356,8 +372,11 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
 #    if reversegrain:
 #        dta = reverse(dta)
 
-#     if True:  # speed change
-#         dta = speed_down(dta, random.randrange(1, 6))
+    
+    if Pitch1 >1:
+        dta = speed_up(dta,int(abs(Pitch1)))
+    if Pitch1 <1:
+        dta = speed_down(dta,int(abs(Pitch1)))
 # 
     if smooth:  # might want to be able to turn smoothing off
         dta = smoothen(dta)
@@ -373,6 +392,8 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
     return(dta)
 
 def play_ready_deprec(dta):
+    if normalize_on:
+        dta = normalize(dta) #normalize the grain
     dta = np.vstack(
     (dta, dta)
     ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
@@ -623,7 +644,7 @@ def graintrigger(
         #debug:
         grain_release = 10
         
-        for i in range(5): #going higher here prevents drawing of the GUI
+        for i in range(3): #going higher here prevents drawing of the GUI
             update_playhead()
             graincounter += 1
             dta1 = next_grain(1, playhead_position, playhead_jitter, length_jitter)
@@ -637,7 +658,10 @@ def graintrigger(
         
         if graincounter >= grain_release: #play when the file is long enough
             #print(len(dta))
-            grain1 = pygame.mixer.Sound(play_ready_deprec(dta))
+            #dta = normalize(dta)
+            #dta_out = env_fadein_out(dta_out) #experimental
+            #dta_out = env_hann(dta_out)
+            grain1 = pygame.mixer.Sound(play_ready_deprec(dta_out))
             graincounter = 0  # reset the counter
                 
                 
@@ -665,12 +689,12 @@ def graintrigger(
             if(pygame.mixer.find_channel() is not None): #if there is a channel available, don't stop one for playing.
                 
                 pygame.mixer.Sound.play(grain1, loops=soundloop_times + rnd)
+                #np.savetxt(f'sound{pygame.time.get_ticks()}.csv', dta_out, delimiter=';') #debug: save as csv files
                 
-                #pygame.time.wait(pausetime1)
 
 def normalize(dta):
 
-    dta = (2 ** (16 - 4)) * dta / dta.max()  # normalize (16bit)
+    dta = (2 ** (16 - 2)) * dta / dta.max()  # normalize (16bit)
   
     return(dta) #do nothing for now
 
@@ -874,14 +898,12 @@ def mainfunc():
 
             # changing pitch
             # this does not work yet, anything other than 1 crashes
-            Pitch1 = Pitch1 + (counter_two)
-            if Pitch1 > 10:
-                Pitch1 = 10
-                counter_two = 0
-            if Pitch1 < 1:
-                Pitch1 = 1
-                counter_two = 19
-            pitch1_jitter = pitch1_jitter + counter_three
+            Pitch1 = Pitch1 + (counter_two)/4
+            if Pitch1 > 3:
+                Pitch1 = 3
+            if Pitch1 < -3:
+                Pitch1 = -3
+            pitch1_jitter = pitch1_jitter + counter_three/4
             if pitch1_jitter < 0:
                 pitch1_jitter = 0
 
@@ -1131,6 +1153,7 @@ def update_playhead():
 
 
 ## config variables
+normalize_on = False
 buffsz = 1024 #buffersize
 before = 0 #initialize the global timer variable
 graincounter = 0 #this counts how many grains have been added to the new array yet.
@@ -1140,6 +1163,8 @@ A_manual = False
 mark_playhead = True # should the playhead be drawn as a red line on top of the waveform
 GUIneedsUpdate = True #draw the GUI, then check if we need to update it.
 
+fadefunc = 0
+fillfadefunc(200) #fill fadefunc with a linear fade 200 samples long
 
 playh_xposA = 0
 playh_xposA2 = 0
@@ -1244,8 +1269,8 @@ print(names)  # print the names of the input devices. the first one will be used
 sourceFileDir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(sourceFileDir)
 
-sample1 = "NI_Grains-31.wav" #this is detected as being sample rate 48khz!!
-sample2 = "NI_Fairlight_Samples-34.wav"
+sample1 = "tori_22000.wav" #this is detected as being sample rate 48khz!!
+sample2 = "Ashlight_Smp_12_22000.wav"
 
 # read the wave file and give some stats about it
 Fs, data = read(sample1)  # read the wave file
