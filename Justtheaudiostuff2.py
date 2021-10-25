@@ -537,28 +537,41 @@ def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semiton
     return (combined)
 
 
-def crossfade(dta_out, dta, fadelength):
+def crossfade(dta_out, dta, fademult):
     if len(dta) == 0:
         print("dta is zero")
+    
+    if fademult < 1:
+        fadelength = int((1-fademult) * len(dta)) # this way 0.1 becomes 0.9 or 90% of grain length
+
+    if fademult > 1:
+        fadelength = int((fademult-1) * len(dta)) #this way 1.1 becomes a pause of 0.1 sample length
+
     if (len(dta_out) > 0): #as long as this isn't the first grain
-        
-        #not take half of data and crossfade
+        #now take half of data and crossfade
         dta_length = len(dta)
         out_length = len (dta_out)
-        dta = FX(dta,envtype, True)
-        cross_dta = dta[0:fadelength]
-        rest_dta = dta[fadelength+1:]
-        rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+        dta = FX(dta,envtype, True) #apply the FX
         
-        #blend the other bit
-        cross_dta_out = dta_out[out_length-fadelength:]
-
-        blended = 0.5*cross_dta_out + 0.5*cross_dta
         
-        dta_out = np.append(rest_dta_out, blended)
-        dta_out = np.append(dta_out, rest_dta)
+        if fademult < 1: #here we are fading (in samples)
+            cross_dta = dta[0:fadelength] #the left part of the new bit - the one that will get faded
+            rest_dta = dta[fadelength+1:] # the right part of the new bit - the one that will remained unchanged.
+            
+            cross_dta_out = dta_out[out_length-fadelength:] # the right but that needs to get blended
+            rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+            
+            blended = 0.5*cross_dta_out + 0.5*cross_dta #now blend the subfragments
+            
+            dta_out = np.append(rest_dta_out, blended) #and assemble ...
+            dta_out = np.append(dta_out, rest_dta) #... all of it.
         
-
+        else: #and here we are not fading any more but rather creating space between
+            if fademult > 1: #don't do this if fadelength == len(dta)
+                print(f"fadelength:{fadelength}")
+                dta = np.pad(dta,(fadelength,0)) #add zeroes to create some space
+            dta_out = np.append(dta_out, FX(dta, envtype, True))
+        
     else:
         dta_out = np.append(dta_out,FX(dta,envtype,True))
     return(dta_out)
@@ -665,7 +678,7 @@ def graintrigger(
             dta2 = next_grain(2, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
             
             dta = mixgrains(dta1, dta2)
-            dta_out = crossfade(dta_out, dta, int(len(dta)/2))
+            dta_out = crossfade(dta_out, dta, fademult)
             
       
             #print(i)
@@ -717,6 +730,7 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
     global selector
     global filebrowsing
     global GUIneedsUpdate
+    global fademult
     #if True:
     if GUIneedsUpdate:
         if not (filebrowsing):
@@ -742,6 +756,7 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             global reversegrain
             global Right_Limit
             global Left_Limit
+            
 
             newd.image(0, 0, image=im1) #this seems to be somewhat slow
 
@@ -765,7 +780,7 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
             newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
             newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
-            newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, pausetime1)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, "{:.2f}".format(fademult))
 
             # left jitters
             newd.text(145 + 100, 127, "{:.2f}".format(volume1_jitter))
@@ -857,7 +872,7 @@ def mainfunc():
         global playhead_speed
         global playhead_jitter
         global soundloop_times
-        global pausetime1
+        global fademult
         global speed_jitter
         global envtype
         global Right_Limit
@@ -1011,13 +1026,13 @@ def mainfunc():
             im1 = "GUI_perform_480_A_pausetime.png"
 
             # changing pausetime
-            pausetime1 = pausetime1 + (counter_two * 10)
-            if pausetime1 > 400:
-                pausetime1 = 400
-                counter_two = 40
-            if pausetime1 < 0:
-                pausetime1 = 0
-                counter_two = 0
+            fademult = fademult + (counter_two / 4)
+            if counter_two != 0:
+                GUIneedsUpdate = True
+            if fademult > 5: #this would be 5 samples distance.
+                fademult = 5
+            if fademult < 0.1:
+                fademult = 0.1 #this would be 90% overlap.
 
         elif selector == 10:
             im1 = "GUI_perform_480_B_Soundfile.png"
@@ -1187,6 +1202,7 @@ mark_playhead = True # should the playhead be drawn as a red line on top of the 
 GUIneedsUpdate = True #draw the GUI, then check if we need to update it.
 
 fadefunc = 0
+fademult = 0.5 #this controls the blending of the grains as fold of grainlength. 0,5 would be blended at the midpoint
 fillfadefunc(200) #fill fadefunc with a linear fade 200 samples long
 
 playh_xposA = 0
