@@ -254,15 +254,6 @@ def speed_up(dta, shift):  # make the sound play faster (and higher in pitch)
     # delete every "shift"th element in the array.
 
 
-def speed_down(
-    dta, shift=10
-):  # slows down the audio by just duplicating data. could anti-alias by shifting a copy and then averaging?
-    dta = np.repeat(dta, 10)  # triple the datapoints
-    dta = np.delete(dta, np.arange(0, dta.size, shift))  # and now remove some again to get the pitch.
-    dta = smoothen(dta,30,1)
-    return dta
-
-
 def decfun(x):
     y = 2 ** (
         (-0.01 * 1 / (grain_length_ms / 10)) * x
@@ -306,7 +297,7 @@ def env_exp(dta):
 
 
 def reverse(dta):  # reverses the sample data
-    return np.flip(dta)
+    return np.flipud(dta)
 
 
 def limiter(dta):
@@ -362,24 +353,13 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
     global grain_length_ms
     global soundloop_times
     global Pitch1
-# 
-#     # print(".")
-# 
-#     if Pitch1 != 1:
-#         dta = pitchshift(dta, Pitch1)
-# 
-#     ##reverse
-#    if reversegrain:
-#        dta = reverse(dta)
 
-    
+    ##reverse
+
     if Pitch1 !=0:
-        dta = pitchshift(dta,Pitch1*100)
-# 
-    if smooth:  # might want to be able to turn smoothing off
-        dta = smoothen(dta)
-    
-
+        dta = pitchshift(dta,Pitch1*100+int((0.5-random.random())*pitch1_jitter*100))
+    #if smooth:  # might want to be able to turn smoothing off
+    #    dta = smoothen(dta)
     if envtype == 1:  # hann envelope
         dta = env_hann(dta)
     elif envtype == 2:  # decay 1/x envelope
@@ -392,7 +372,8 @@ def FX(dta, envtype = 1, smooth = True): #this will replace the play_ready funct
 def play_ready_deprec(dta):
     if normalize_on:
         dta = normalize(dta) #normalize the grain
-    print(f"max:{np.max(abs(dta))}")
+    dta = smoothen(dta) #this is full output level smoothing
+    #print(f"max:{np.max(abs(dta))}")
     dta = np.vstack(
     (dta, dta)
     ).T  # duplicate processed channels to create a "pseudo stereo" one to play"
@@ -535,8 +516,8 @@ def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semiton
     c = int(len(dta)/sz) #frames that need to be processed. 220 samplepoints at a time
     #print(f"c:{c}") #9
     
-    shiftx = int(shift//fr) #shift 100 Hz
-    print(f"shiftx:{shiftx}") #3
+    shiftx = int(shift//fr) #shift in Hz. Shiftx is samples shift per window.
+    #print(f"shiftx:{shiftx}") #3
     
     #saveplot(dta, "untransformed_grain.png")
     combined = np.empty(shape = (0,0))
@@ -549,7 +530,6 @@ def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semiton
             rf[0:shiftx] = 0 #overwrite the wrapped around frequencies with zeros.
         if shiftx < 0:
             rf[len(rf)-shiftx:] #for the other shift direction
-        
         nr = np.fft.irfft(rf) #back from fourier transform
         ns = np.ravel(nr)
         combined = np.append(combined, ns)
@@ -812,8 +792,8 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             # picture is 302 x 74 at position 318, 30
             # draws a picture of the waveform
 
-            newd.image(5, 30, image="AudioA.png")  # then flip it to off if needed.
-            newd.image(315, 30, image="AudioB.png")  # then flip it to off if needed.
+            newd.image(5, 30, image="AudioA.png") #left and right waveform
+            newd.image(315, 30, image="AudioB.png")
             
             #print(playhead_position)
             #print(playhead_position_second)
@@ -869,6 +849,9 @@ def mainfunc():
         global pitch1_jitter
         global LFO1_parameter1
         global onepressed
+        global twopressed
+        global threepressed
+        global fourpressed
         global grain_length_ms
         global length_jitter
         global playhead_speed
@@ -884,6 +867,7 @@ def mainfunc():
         global Left_Limit_second
         global A_manual
         global playhead_speed_mult
+        
         
         if oldselector != selector:  # if the selector changed reset the counters
             counter_two = 0
@@ -937,20 +921,15 @@ def mainfunc():
                 Pitch1 = 10
             if Pitch1 < -10:
                 Pitch1 = -10
-            pitch1_jitter = pitch1_jitter + counter_three/4
+            pitch1_jitter = pitch1_jitter + counter_three/2
             if pitch1_jitter < 0:
                 pitch1_jitter = 0
 
-            if pitch1_jitter > 1:
-                pitch1_jitter = 1
+            if pitch1_jitter > 10:
+                pitch1_jitter = 10
 
         elif selector == 4:
             im1 = "GUI_perform_480_A_Tuning.png"
-
-            if counter_three % 2 == 0:  # even number
-                reversegrain = False
-            else:
-                reversegrain = True
 
         elif selector == 5:
             im1 = "GUI_perform_480_A_grainsize.png"
@@ -1077,6 +1056,16 @@ def mainfunc():
                 chosensample = 2
             if selector == 1:
                 A_manual = not(A_manual)
+        
+        if threepressed:
+            threepressed = False
+            if selector == 4:
+                reversegrain = not(reversegrain)
+                if reversegrain:
+                    data = reverse(data)
+                    saveplot(data,"AudioA.png")
+                    GUIneedsUpdate = True
+
                 
         if A_manual == True:
             playhead_speed_mult = 0
@@ -1397,6 +1386,12 @@ volume2_jitter = 0
 pitch1_jitter = 0
 loop_jitter = 0
 ##
+onepressed = False
+twopressed = False
+threepressed = False
+fourpressed = False
+
+
 dta_out = np.empty(shape = (0,0)) #the grain target file
 #
 
