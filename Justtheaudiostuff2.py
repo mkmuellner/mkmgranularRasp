@@ -276,6 +276,11 @@ def env_fadein_out(dta):
     dta = dta * np.pad(np.flipud(fadefunc),(dtalength-fadelength,0), 'constant', constant_values = (1,0)) #fadein and 1's
     return(dta)
 
+def env_fadein_out2(dta, fadelength): # an alternative where the fadelength is given as an argument. Might generally be a cleaner solution.
+    dtalength = len(dta)
+    dta = np.pad(dta[fadelength:dtalength-fadelength], (fadelength,fadelength), mode = "linear_ramp", end_values = (0,0))
+    return(dta)
+
 
 def env_hann(dta):
     return dta * np.hanning(
@@ -286,6 +291,7 @@ def env_hann(dta):
 def env_decay(dta):
     q = np.arange(1, len(dta) + 1)
     q = decfun(q)
+    q = env_fadein_out2(q, 80) #blunt the extreme spikes a bit
     #now take down the extreme spike at the start a bit to avoid popping
     return dta * q  # this creates a hanning envelope. an array between 0 and 1.0
 
@@ -293,6 +299,7 @@ def env_decay(dta):
 def env_exp(dta):
     q = np.arange(1, len(dta) + 1)
     q = decfun(q)
+    q = env_fadein_out2(q, 80)
     q = np.flip(q)
     return dta * q  # this creates a hanning envelope. an array between 0 and 1.0
 
