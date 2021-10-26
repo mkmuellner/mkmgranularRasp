@@ -97,6 +97,7 @@ def turned_rotary_callback(channel):  # interrupt called
             counter_four -= 1
             
     GUIneedsUpdate = True
+    print(".")
     # print(f"one: {selector}")
     # print(f"two: {counter_two}")
     # print(f"three: {counter_three}")
@@ -548,7 +549,7 @@ def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semiton
 def crossfade(dta_out, dta, fademult):
     
     if len(dta) == 0:
-        print("dta is zero")
+        sys.exit("error in crossfade: dta is length zero")
     #print(f"fademult:{fademult}")
     if fademult < 1:
         fadelength = int((1-fademult) * len(dta)) # this way 0.1 becomes 0.9 or 90% of grain length
@@ -569,6 +570,10 @@ def crossfade(dta_out, dta, fademult):
             
             cross_dta_out = dta_out[out_length-fadelength:] # the right but that needs to get blended
             rest_dta_out = dta_out[0:out_length -fadelength-1] # get the bit that doesn't need to be blended
+            
+            if len(cross_dta_out) != len(cross_dta):
+                sys.exit(f"can't crossfade. Len(cross_dta_out):{len(cross_dta_out)} and Len(cross_dta):{len(cross_dta)} ")
+            
             
             blended = 0.5*cross_dta_out + 0.5*cross_dta #now blend the subfragments
             
