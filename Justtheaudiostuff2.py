@@ -256,7 +256,7 @@ def speed_up(dta, shift):  # make the sound play faster (and higher in pitch)
 
 def decfun(x):
     y = 2 ** (
-        (-0.01 * 1 / (grain_length_ms / 10)) * x
+        (-0.01 / (grain_length_ms / 30)) * x
     )  # the grain lethgth divided by 100 kinda works out
     return y
 
@@ -286,6 +286,7 @@ def env_hann(dta):
 def env_decay(dta):
     q = np.arange(1, len(dta) + 1)
     q = decfun(q)
+    #now take down the extreme spike at the start a bit to avoid popping
     return dta * q  # this creates a hanning envelope. an array between 0 and 1.0
 
 
@@ -538,9 +539,10 @@ def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semiton
 
 
 def crossfade(dta_out, dta, fademult):
+    
     if len(dta) == 0:
         print("dta is zero")
-    
+    #print(f"fademult:{fademult}")
     if fademult < 1:
         fadelength = int((1-fademult) * len(dta)) # this way 0.1 becomes 0.9 or 90% of grain length
 
@@ -568,12 +570,16 @@ def crossfade(dta_out, dta, fademult):
         
         else: #and here we are not fading any more but rather creating space between
             if fademult > 1: #don't do this if fadelength == len(dta)
-                print(f"fadelength:{fadelength}")
+                #print(f"fadelength:{fadelength}")
                 dta = np.pad(dta,(fadelength,0)) #add zeroes to create some space
-            dta_out = np.append(dta_out, FX(dta, envtype, True))
+                dta_out = np.append(dta_out, dta) #join the two together
+                #print(f"dta_out_len:{len(dta_out)}")
+            if fademult == 1: #exactly zero space
+                dta_out = np.append(dta_out, dta)
         
     else:
         dta_out = np.append(dta_out,FX(dta,envtype,True))
+    
     return(dta_out)
       
 
@@ -1136,8 +1142,15 @@ def t_on(): #start the timer
     
 def t_off(): #end the timer
     global before
-    print(f"exec time (ms):{time.time()*1000-before}")
-
+    global t_measured
+    
+    if len(t_measured) < 10: #until 10 measurements are done add the time differences to a vector
+        t_measured = np.append(t_measured, time.time()*1000-before)
+    else:
+        outp_num = np.average(t_measured)
+        outp = "{:.2f}".format(outp_num)
+        print(f"exec time (ms):{outp}")
+        t_measured = np.zeros(0)
 
 def update_playhead():
     global playhead_position
@@ -1191,6 +1204,8 @@ def update_playhead():
 
 
 ## config variables
+t_measured= np.zeros(0)
+
 normalize_on = False
 buffsz = 1024 #buffersize
 before = 0 #initialize the global timer variable
@@ -1464,7 +1479,7 @@ filebrowsing = False
 signal.signal(signal.SIGINT, signal_handler)
 loadsamples()
 
-dummy.repeat(1000, GUI)  # update the GUI every 300ms setting this value makes a big difference
+dummy.repeat(500, GUI)  # update the GUI every 300ms setting this value makes a big difference
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 dummy.repeat(45, mainfunc)  #doing this twice seems to work as a workaround to prevent segmentation errors. I don't know why
