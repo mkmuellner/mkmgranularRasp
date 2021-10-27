@@ -24,6 +24,9 @@ from scipy.ndimage.filters import uniform_filter1d
 GPIObuffer = []
 
 
+def checkBPM():
+    pygame.time.ticks()
+
 def signal_handler(
     sig, frame
 ):  # needed for the interrupt. cleans GPIO when program is canceled
@@ -60,6 +63,7 @@ def button_pressed_callback(channel):  # interrupt called
         print("Not sure what was pressed. Got channel:")
         print(channel)
     GUIneedsUpdate = True
+    
 
 def turned_rotary_callback(channel):  # interrupt called
     global selector  # could also be using counter_one here instead
@@ -98,6 +102,7 @@ def turned_rotary_callback(channel):  # interrupt called
             
     GUIneedsUpdate = True
     print(".")
+    
     # print(f"one: {selector}")
     # print(f"two: {counter_two}")
     # print(f"three: {counter_three}")
@@ -117,9 +122,8 @@ def filebrowser():
         newd.rectangle(10, 10, 370, 400, color="white")
         newd.rectangle(380, 10, 790, 400, color="white")
         filelist = os.listdir()
-        indices = [
-            i for i, x in enumerate(filelist) if ".wav" in x
-        ]  # return only wav files
+        indices = [i for i, x in enumerate(filelist) if ".wav" in x]  # return only wav files
+        
         element = []
         for index in indices:
             element.append(filelist[index])
@@ -308,9 +312,17 @@ def env_exp(dta):
 def reverse(dta):  # reverses the sample data
     return np.flipud(dta)
 
+def sinecompress(i):
+    maxval = 32766 #taking this as int16 max
+    
+    return i*math.sin((math.pi/2)/maxval*abs(i))
 
-def limiter(dta):
-    return 0
+
+def compressor(dta): #this uses a sine curve to compress audio
+    return dta
+    #for i in range(len(dta)):
+    #    dta[i] = sinecompress(dta[i])
+    #return dta
 
 
 # consider putting multiple grains into one array to have something longer to play every time.
@@ -517,6 +529,15 @@ def saveplot(dta, filename):
     plt.savefig(fname=filename, bbox_inches="tight", transparent=True)  #
     plt.close()
 
+def exp_filter(dta, filterpos): #WIP
+    dta_len = len(dta)
+    
+    transition_len = dta_len//6 #just an assumption here for something reasonable
+    tns = np.array(0)
+    
+    dta_fft = np.fft.fft(dta)
+    
+
 def pitchshift(dta, shift):  # """ Changes the pitch of a sound by ``n`` semitones. """
     fr = 100 #frames to process at a time
     sz = 22000//fr #22000 would be the rate. samplepoints to process per turn.
@@ -561,7 +582,6 @@ def crossfade(dta_out, dta, fademult):
         #now take half of data and crossfade
         dta_length = len(dta)
         out_length = len (dta_out)
-        dta = FX(dta,envtype, True) #apply the FX
         
         
         if fademult < 1: #here we are fading (in samples)
@@ -590,7 +610,7 @@ def crossfade(dta_out, dta, fademult):
                 dta_out = np.append(dta_out, dta)
         
     else:
-        dta_out = np.append(dta_out,FX(dta,envtype,True))
+        dta_out = np.append(dta_out,dta)
     
     return(dta_out)
       
@@ -696,12 +716,14 @@ def graintrigger(
             dta2 = next_grain(2, playhead_position_second, playhead_jitter, length_jitter) #for now we use the same jitters
             
             dta = mixgrains(dta1, dta2)
+            dta = FX(dta, envtype, True)
+            dta = compressor(dta)
             dta_out = crossfade(dta_out, dta, fademult)
             
       
             #print(i)
         
-        if graincounter >= grain_release: #play when the file is long enough
+        if (graincounter >= grain_release) and (beattrigger): #play when the file is long enough. requires beattrigger to be true to release the sound.
             #print(len(dta))
             #dta = normalize(dta)
             #dta_out = env_fadein_out(dta_out) #experimental
@@ -743,7 +765,7 @@ def normalize(dta):
   
     return(dta) #do nothing for now
 
-def GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
+def GUI(): #this is the original one (kept as a backup)
      
     global selector
     global filebrowsing
@@ -751,6 +773,7 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
     global fademult
     #if True:
     if GUIneedsUpdate:
+        t_on()
         if not (filebrowsing):
             #newd.clear() # clear does not seem to be necessary
             # use rotary one to select stuff
@@ -849,6 +872,135 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             #)  # how long to wait after one grain is triggered
             
             GUIneedsUpdate = False #reset the update marker
+            t_off()
+
+def b_GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
+     
+    global selector
+    global filebrowsing
+    global GUIneedsUpdate
+    global fademult
+    #if True:
+    if GUIneedsUpdate:
+        if not (filebrowsing):
+            #newd.clear() # clear does not seem to be necessary
+            # use rotary one to select stuff
+            selected = counter_one
+            if counter_one > 14:
+                selector = 14
+            if counter_one < 0:
+                selector = 0
+
+            global Volume1
+            global Pitch1
+            global Tuning1
+            global data_s16
+            global LFO1  # only for debugging
+            global im1
+            global playhead_position
+            global playhead_position_second
+            global newsample
+            global grain_length_samples
+            global grain_waittime_ms
+            global reversegrain
+            global Right_Limit
+            global Left_Limit
+
+
+            newd.image(0, 0, image=im1) #this seems to be somewhat slow
+
+            # limiters
+            # leftmost is 5 rightmost is 300
+            Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
+            Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
+            #Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
+            #Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
+            
+            if selector == 1:
+                im1 = "GUI_perform_480_SoundA.png"
+            if selector == 0:
+                pygame.draw.rect(newd, "red",(0,0,30,100), 3)
+                
+            elif selector == 2:
+                im1 = "GUI_perform_480_A_volume.png"
+            elif selector == 3:
+                im1 = "GUI_perform_480_A_pitch.png"
+            elif selector == 4:
+                im1 = "GUI_perform_480_A_Tuning.png"
+            elif selector == 5:
+                im1 = "GUI_perform_480_A_grainsize.png"
+            elif selector == 6:
+                im1 = "GUI_perform_480_A_envtype.png"
+            elif selector == 7:
+                im1 = "GUI_perform_480_A_playspeed.png"
+            elif selector == 8:
+                im1 = "GUI_perform_480_A_grainloops.png"
+            elif selector == 9:
+                im1 = "GUI_perform_480_A_pausetime.png"
+            elif selector == 10:
+                im1 = "GUI_perform_480_B_Soundfile.png"
+            elif selector == 11:
+                im1 = "GUI_perform_480_LFO1.png"
+            elif selector == 12:
+                im1 = "GUI_perform_480_LFO2.png"
+            elif selector == 13:
+                im1 = "GUI_perform_480_LFO3.png"
+            elif selector == 14:
+                im1 = "GUI_perform_480_LFO4.png"
+            
+            newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
+            newd.text(Right_Limiter_Pos, 20, "|", color="white")
+            
+            #newd.text(Left_Limiter_Pos2, 20, "|", color="white")  # y = 58 is center
+            #newd.text(Right_Limiter_Pos2, 20, "|", color="white")
+
+            newd.text(145, 127, "{:.2f}".format(Volume1))
+            newd.text(145, 127 + 26 * 1, "{:.2f}".format(Pitch1))
+            newd.text(145, 127 + 26 * 2 - 3, Tuning1)
+            newd.text(145, 127 + 26 * 3 + 18, round(grain_length_ms))
+            newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
+            newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, "{:.2f}".format(fademult))
+
+            # left jitters
+            newd.text(145 + 100, 127, "{:.2f}".format(volume1_jitter))
+            newd.text(145 + 100, 127 + 26 * 1, "{:.2f}".format(pitch1_jitter))
+            newd.text(145 + 100, 127 + 26 * 3 + 18, "{:.2f}".format(length_jitter))
+            newd.text(
+                145 + 100, 127 + 26 * 3 + 18 + 24 * 2, "{:.2f}".format(playhead_jitter)
+            )
+            newd.text(145 + 100, 127 + 26 * 3 + 18 + 24 * 3, loop_jitter)
+
+            # LFO
+            newd.text(675, 75, "{:.2f}".format(LFO1_parameter1))
+            newd.text(675, 73 + 75, "{:.2f}".format(LFO2_parameter1))
+            newd.text(675, 70 + 75 * 2, "{:.2f}".format(LFO3_parameter1))
+            newd.text(675, 70 - 3 + 75 * 3, "{:.2f}".format(LFO4_parameter1))
+
+            # flip on
+            # newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
+            if reversegrain:
+                newd.image(225, 179, image="FLIP_on.png")  # then flip it to off if needed.
+            else:
+                newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+
+            # picture is 302 x 74 at position 318, 30
+            # draws a picture of the waveform
+
+            newd.image(5, 30, image="AudioA.png") #left and right waveform
+            newd.image(315, 30, image="AudioB.png")
+            
+            
+            xposA = (300 - 5) / len_data * playhead_position + 5
+            newd.text(xposA, 65, "|", color = "red")
+           
+            xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
+            newd.text(xposA2, 65, "|", color = "red")
+                #newd.line(xposA2, 40, xposA2, 90, color="red")
+            
+            GUIneedsUpdate = False #reset the update marker
+
 
 
 def mainfunc():
@@ -1218,6 +1370,10 @@ def update_playhead():
 ## config variables
 t_measured= np.zeros(0)
 
+beattrigger = True #per default play always
+Playbackmode = 1 #1 normal, 2 is BPM trigger mode
+BPM = 80 #default is 80 beats per minute
+
 normalize_on = False
 buffsz = 1024 #buffersize
 before = 0 #initialize the global timer variable
@@ -1491,7 +1647,8 @@ filebrowsing = False
 signal.signal(signal.SIGINT, signal_handler)
 loadsamples()
 
-dummy.repeat(500, GUI)  # update the GUI every 300ms setting this value makes a big difference
+
+dummy.repeat(300, GUI)  # update the GUI every 300ms setting this value makes a big difference
 # dummy.repeat(500, filebrowser) #update the GUI every 300ms
 dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
 dummy.repeat(45, mainfunc)  #doing this twice seems to work as a workaround to prevent segmentation errors. I don't know why
