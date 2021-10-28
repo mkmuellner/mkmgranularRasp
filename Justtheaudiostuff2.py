@@ -19,6 +19,20 @@ import datetime
 import math
 from scipy.ndimage.filters import uniform_filter1d
 
+import pygame.freetype #font support
+
+font_size_screen = 20
+
+from pygame.locals import ( #get a few events to use like the escape key and arrow keys
+    K_UP,
+    K_DOWN,
+    K_LEFT,
+    K_RIGHT,
+    K_ESCAPE,
+    KEYDOWN,
+    QUIT,
+)
+
 # import tkinter as tk
 
 GPIObuffer = []
@@ -765,7 +779,7 @@ def normalize(dta):
   
     return(dta) #do nothing for now
 
-def GUI(): #this is the original one (kept as a backup)
+def _GUI(): #this is the original one (kept as a backup)
      
     global selector
     global filebrowsing
@@ -874,8 +888,8 @@ def GUI(): #this is the original one (kept as a backup)
             GUIneedsUpdate = False #reset the update marker
             t_off()
 
-def b_GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
-     
+def GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
+    t_on()
     global selector
     global filebrowsing
     global GUIneedsUpdate
@@ -906,21 +920,21 @@ def b_GUI(): #this slows sound playback significantly. I wonder if I should use 
             global Right_Limit
             global Left_Limit
 
-
-            newd.image(0, 0, image=im1) #this seems to be somewhat slow
-
-            # limiters
-            # leftmost is 5 rightmost is 300
+            background = pygame.image.load(im1).convert()
+            screen.blit(background,(0,0)) #this works nicely
+            
+            
+            # limiters:        # leftmost is 5 rightmost is 300
             Left_Limiter_Pos = 5 + round(Left_Limit / len_data * (300 - 5))
             Right_Limiter_Pos = 5 + round(Right_Limit / len_data * (300 - 5))
-            #Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
-            #Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
+            Left_Limiter_Pos2 = 315 + round(Left_Limit_second / len_data_second * (300 - 5))
+            Right_Limiter_Pos2 = 315 + round(Right_Limit_second / len_data_second * (300 - 5))
             
             if selector == 1:
                 im1 = "GUI_perform_480_SoundA.png"
             if selector == 0:
-                pygame.draw.rect(newd, "red",(0,0,30,100), 3)
-                
+                pass
+                #pygame.draw.rect(newd, "red",(0,0,30,100), 3)
             elif selector == 2:
                 im1 = "GUI_perform_480_A_volume.png"
             elif selector == 3:
@@ -948,43 +962,61 @@ def b_GUI(): #this slows sound playback significantly. I wonder if I should use 
             elif selector == 14:
                 im1 = "GUI_perform_480_LFO4.png"
             
-            newd.text(Left_Limiter_Pos, 20, "|", color="white")  # y = 58 is center
-            newd.text(Right_Limiter_Pos, 20, "|", color="white")
             
-            #newd.text(Left_Limiter_Pos2, 20, "|", color="white")  # y = 58 is center
-            #newd.text(Right_Limiter_Pos2, 20, "|", color="white")
+            #might want to only run this after the wave files have been drawn
+            GAME_FONT.render_to(screen, (Left_Limiter_Pos-5, 20+5), "|", (255, 255, 255)) #y = 58 is center
+            GAME_FONT.render_to(screen, (Right_Limiter_Pos-5, 20+5), "|", (255, 255, 255))
+            GAME_FONT.render_to(screen, (Left_Limiter_Pos2-5, 20+5), "|", (255, 255, 255)) #y = 58 is center
+            GAME_FONT.render_to(screen, (Right_Limiter_Pos2-5, 20+5), "|", (255, 255, 255))
 
-            newd.text(145, 127, "{:.2f}".format(Volume1))
-            newd.text(145, 127 + 26 * 1, "{:.2f}".format(Pitch1))
-            newd.text(145, 127 + 26 * 2 - 3, Tuning1)
-            newd.text(145, 127 + 26 * 3 + 18, round(grain_length_ms))
-            newd.text(145, 127 + 26 * 3 + 18 + 24, envtype)
-            newd.text(145, 127 + 26 * 3 + 18 + 24 * 2, playhead_speed)
-            newd.text(145, 127 + 26 * 3 + 18 + 24 * 3, soundloop_times)
-            newd.text(145, 127 + 26 * 3 + 18 + 24 * 4, "{:.2f}".format(fademult))
-
+            GAME_FONT.render_to(screen, (145-5, 127+5), "{:.2f}".format(Volume1)) #y = 58 is center
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 1), "{:.2f}".format(Pitch1))
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 2-3), str(Tuning1)) #y = 58 is center
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 3+18), str(round(grain_length_ms)))
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 3+18+24), str(envtype))
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 3 + 18 + 24 * 2), str(playhead_speed))
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 3 + 18 + 24 * 3), str(soundloop_times))
+            GAME_FONT.render_to(screen, (145-5, 127+5 + 26 * 3 + 18 + 24 * 4), "{:.2f}".format(fademult))
+            
             # left jitters
-            newd.text(145 + 100, 127, "{:.2f}".format(volume1_jitter))
-            newd.text(145 + 100, 127 + 26 * 1, "{:.2f}".format(pitch1_jitter))
-            newd.text(145 + 100, 127 + 26 * 3 + 18, "{:.2f}".format(length_jitter))
-            newd.text(
-                145 + 100, 127 + 26 * 3 + 18 + 24 * 2, "{:.2f}".format(playhead_jitter)
-            )
-            newd.text(145 + 100, 127 + 26 * 3 + 18 + 24 * 3, loop_jitter)
+            GAME_FONT.render_to(screen, (145-5 + 100, 127+5), "{:.2f}".format(volume1_jitter))
+            GAME_FONT.render_to(screen, (145-5 + 100, 127+5 + 26 * 1), "{:.2f}".format(pitch1_jitter))
+            GAME_FONT.render_to(screen, (145-5 + 100, 127+5 + 26 * 3 + 18), "{:.2f}".format(length_jitter))
+            GAME_FONT.render_to(screen, (145-5 + 100, 127+5 + 26 * 3 + 18 + 24 * 2), "{:.2f}".format(playhead_jitter))
+            GAME_FONT.render_to(screen, (145-5 + 100, 127+5 + 26 * 3 + 18 + 24 * 3), str(loop_jitter))
 
             # LFO
-            newd.text(675, 75, "{:.2f}".format(LFO1_parameter1))
-            newd.text(675, 73 + 75, "{:.2f}".format(LFO2_parameter1))
-            newd.text(675, 70 + 75 * 2, "{:.2f}".format(LFO3_parameter1))
-            newd.text(675, 70 - 3 + 75 * 3, "{:.2f}".format(LFO4_parameter1))
-
-            # flip on
-            # newd.image(225, 179, image="FLIP_on.png") # then flip it to off if needed.
+            GAME_FONT.render_to(screen, (675-5, 75+5), "{:.2f}".format(LFO1_parameter1))
+            GAME_FONT.render_to(screen, (675-5, 73 + 75+5), "{:.2f}".format(LFO2_parameter1))
+            GAME_FONT.render_to(screen, (675-5, 70+5 + 75 * 2), "{:.2f}".format(LFO3_parameter1))
+            GAME_FONT.render_to(screen, (675-5, 70+5 - 3 + 75 * 3), "{:.2f}".format(LFO4_parameter1))
+            
+            
             if reversegrain:
-                newd.image(225, 179, image="FLIP_on.png")  # then flip it to off if needed.
+                img="FLIP_on.png"
             else:
-                newd.image(225, 179, image="FLIP_off.png")  # then flip it to off if needed.
+                img="FLIP_off.png"
+            
+            flip_on_off = pygame.image.load(img).convert()
+            screen.blit(flip_on_off,(225,179))
 
+            
+            # picture is 302 x 74 at position 318, 30
+            # draws a picture of the waveform (in principle I would NOT need to update those every time)
+            A = pygame.image.load("AudioA.png").convert()
+            B = pygame.image.load("AudioB.png").convert()
+            screen.blit(A,(5,30)) #this works nicely
+            screen.blit(B,(315,30)) #this works nicely
+
+            # draw the playhead position
+            xposA = (300 - 5) / len_data * playhead_position + 5
+            xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
+
+            GAME_FONT.render_to(screen, (xposA, 65), "|", (255,0,0))
+            GAME_FONT.render_to(screen, (xposA2, 65), "|", (255,0,0))
+            
+            
+            """
             # picture is 302 x 74 at position 318, 30
             # draws a picture of the waveform
 
@@ -998,10 +1030,11 @@ def b_GUI(): #this slows sound playback significantly. I wonder if I should use 
             xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
             newd.text(xposA2, 65, "|", color = "red")
                 #newd.line(xposA2, 40, xposA2, 90, color="red")
+            """
             
             GUIneedsUpdate = False #reset the update marker
-
-
+            pygame.display.flip()
+            t_off()
 
 def mainfunc():
     global filebrowsing
@@ -1369,7 +1402,9 @@ def update_playhead():
 
 ## config variables
 t_measured= np.zeros(0)
-
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 480
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 beattrigger = True #per default play always
 Playbackmode = 1 #1 normal, 2 is BPM trigger mode
 BPM = 80 #default is 80 beats per minute
@@ -1506,7 +1541,7 @@ pygame.mixer.pre_init(
 )  # lower buffer gives more clicks but more lag
 pygame.init()
 pygame.mixer.init()
-
+GAME_FONT = pygame.freetype.Font("/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf", font_size_screen)
 
 ## apparently the below can also work
 # pygame.mixer.quit()
@@ -1528,20 +1563,9 @@ data_second = data_second[:, 0]  # only process the left channel
 len_data = len(data)
 len_data_second = len(data_second)
 
-# #plot the waveform
-# plt.figure()
-# plt.plot(data_s16)
-# plt.plot(data_s16, color = "red")
-# plt.show()
-
-###global effects like pitch
-# data = speed_up(data, 10) #larger number less uptuning
-# data = speed_down(data, 4) #larger number more downtuning
-
 data_backup = data  # back up the original data to be able to reset
 data_backup_second = data_second
 
-# data = reverse(data)
 reversegrain = False  # should the grain be reversed
 grain_length_ms = 90.0  # in milliseconds (global)
 grains_per_second = 4.0  # how many grains are triggered per second
@@ -1637,20 +1661,32 @@ changed = False  # only process the audio once
 #constant_sample.set_volume(0.05)
 # pygame.mixer.Channel(0).play(constant_sample, loops=-1, fade_ms=300) deactivaterd for now
 
-app = App(width=800, height=480, bg="gray50")
-# app.set_full_screen()
-newd = Drawing(app, width="fill", height="fill")
-dummy = Text(app, "")  # not sure this dummy procedure is really needed
-
 filebrowsing = False
 
 signal.signal(signal.SIGINT, signal_handler)
 loadsamples()
 
 
-dummy.repeat(300, GUI)  # update the GUI every 300ms setting this value makes a big difference
-# dummy.repeat(500, filebrowser) #update the GUI every 300ms
-dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
-dummy.repeat(45, mainfunc)  #doing this twice seems to work as a workaround to prevent segmentation errors. I don't know why
-# dummy.repeat(1, update_rotaries)
-app.display()
+running = True
+
+while running:
+    #mainloop
+    
+    GUI()
+    mainfunc()
+    for event in pygame.event.get(): #look if any events happened
+        if event.type == KEYDOWN:
+            if event.key == K_ESCAPE: #look if the escape key was pressed
+                running = False
+        elif event.type == QUIT:
+            running = False
+
+## below is the GUIZERO version
+#app = App(width=800, height=480, bg="gray50")
+##app.set_full_screen()
+#newd = Drawing(app, width="fill", height="fill")
+#dummy = Text(app, "")  # not sure this dummy procedure is really needed
+#dummy.repeat(300, GUI)  # update the GUI every 300ms setting this value makes a big difference
+#dummy.repeat(30, mainfunc)  # this will be the "work loop", update every 30ms
+#dummy.repeat(45, mainfunc)  #doing this twice seems to work as a workaround to prevent segmentation errors. I don't know why
+#app.display()
