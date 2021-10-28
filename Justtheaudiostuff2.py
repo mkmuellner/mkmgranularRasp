@@ -132,9 +132,10 @@ def filebrowser():
     global sample1
     global sample2
     if filebrowsing:
-        newd.clear()
+
         newd.rectangle(10, 10, 370, 400, color="white")
         newd.rectangle(380, 10, 790, 400, color="white")
+
         filelist = os.listdir()
         indices = [i for i, x in enumerate(filelist) if ".wav" in x]  # return only wav files
         
@@ -889,7 +890,7 @@ def _GUI(): #this is the original one (kept as a backup)
             t_off()
 
 def GUI(): #this slows sound playback significantly. I wonder if I should use music instead of play
-    t_on()
+    #t_on()
     global selector
     global filebrowsing
     global GUIneedsUpdate
@@ -1003,8 +1004,8 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             
             # picture is 302 x 74 at position 318, 30
             # draws a picture of the waveform (in principle I would NOT need to update those every time)
-            A = pygame.image.load("AudioA.png").convert()
-            B = pygame.image.load("AudioB.png").convert()
+            A = pygame.image.load("AudioA.png").convert_alpha()
+            B = pygame.image.load("AudioB.png").convert_alpha()
             screen.blit(A,(5,30)) #this works nicely
             screen.blit(B,(315,30)) #this works nicely
 
@@ -1015,26 +1016,10 @@ def GUI(): #this slows sound playback significantly. I wonder if I should use mu
             GAME_FONT.render_to(screen, (xposA, 65), "|", (255,0,0))
             GAME_FONT.render_to(screen, (xposA2, 65), "|", (255,0,0))
             
-            
-            """
-            # picture is 302 x 74 at position 318, 30
-            # draws a picture of the waveform
-
-            newd.image(5, 30, image="AudioA.png") #left and right waveform
-            newd.image(315, 30, image="AudioB.png")
-            
-            
-            xposA = (300 - 5) / len_data * playhead_position + 5
-            newd.text(xposA, 65, "|", color = "red")
-           
-            xposA2 = (300 - 5) / len_data_second * playhead_position_second + 315
-            newd.text(xposA2, 65, "|", color = "red")
-                #newd.line(xposA2, 40, xposA2, 90, color="red")
-            """
-            
             GUIneedsUpdate = False #reset the update marker
+            
             pygame.display.flip()
-            t_off()
+            #t_off()
 
 def mainfunc():
     global filebrowsing
