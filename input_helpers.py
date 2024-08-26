@@ -49,10 +49,10 @@ def handle_keyboard_input(
     keyboard_input_enabled, grain_queue, move_playhead, playhead_direction, mix, 
     grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
     grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
-    min_grain_size_ms, max_grain_density, min_grain_density
+    min_grain_size_ms, max_grain_density, min_grain_density,
+    apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
+    apply_random_grain_density, apply_random_position
 ):
-    global apply_pitch, apply_envelope, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
-
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
 
@@ -102,13 +102,13 @@ def handle_keyboard_input(
             playhead_speed = max(0.1, playhead_speed - 0.1)  # Minimum playhead speed is 0.1
             print(f"Playhead Speed: {playhead_speed}")
 
-        # Add key bindings to toggle the new binary variables
+        # New key bindings to toggle the booleans
         elif key == 'y':  # Toggle pitch application
             apply_pitch = not apply_pitch
             print(f"Pitch Application: {apply_pitch}")
         elif key == 't':  # Toggle envelope application
-            apply_envelope = not apply_envelope
-            print(f"Envelope Application: {apply_envelope}")
+            envelope_enabled = not envelope_enabled
+            print(f"Envelope Application: {envelope_enabled}")
         elif key == 'r':  # Toggle random pitch variation
             apply_random_pitch = not apply_random_pitch
             print(f"Random Pitch Variation: {apply_random_pitch}")
@@ -127,3 +127,4 @@ def handle_keyboard_input(
             with grain_queue.mutex:
                 grain_queue.queue.clear()
 
+    return apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
