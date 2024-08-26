@@ -8,7 +8,7 @@ import queue
 # from your_original_effects_module import your_effect_function_1, your_effect_function_2
 
 # Audio settings
-filename = 'your_audio_file.wav'
+filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
