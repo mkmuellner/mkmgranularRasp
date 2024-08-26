@@ -81,4 +81,110 @@ def grain_producer(grain_queue, stop_event):
         
         # Determine valid random offset range
         if current_position < effective_random_offset:
-            # If near the beginning, only allow po
+            # If near the beginning, only allow positive offset
+            start_position = current_position + random.randint(0, effective_random_offset)
+        elif current_position > (len(data) - grain_size - effective_random_offset):
+            # If near the end, only allow negative offset
+            start_position = current_position - random.randint(0, effective_random_offset)
+        else:
+            # In the middle, allow both positive and negative offsets
+            start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
+        
+        # Ensure start_position stays within bounds
+        start_position = max(0, min(len(data) - grain_size, start_position))
+        
+        # Generate grain at randomized start position
+        grain = generate_grain(data, start_position, grain_size, pitch_shift)
+        
+        try:
+            grain_queue.put_nowait(grain)  # Use non-blocking put
+        except queue.Full:
+            pass  # If the queue is full, just skip adding this grain
+
+        # Move playhead forward or backward if allowed
+        if move_playhead:
+            current_position += grain_interval_samples * playhead_direction
+            if current_position >= len(data):
+                current_position = 0
+            elif current_position < 0:
+                current_position = len(data) - grain_size
+
+        # Control the rate of grain production based on grain density
+        time.sleep(1 / grain_density)
+
+# Audio Callback Function for Real-Time Playback
+def audio_callback(outdata, frames, time, status):
+    if status:
+        print(status)  # Print any errors or warnings
+    try:
+        grain = grain_queue.get_nowait()
+        if len(grain) < len(outdata):
+            outdata[:len(grain)] = grain.reshape(-1, 1)
+            outdata[len(grain):] = 0  # Fill the rest with silence if grain is smaller
+        else:
+            outdata[:] = grain[:frames].reshape(-1, 1)
+    except queue.Empty:
+        outdata.fill(0)  # Output silence if no grains are available
+
+# Initialize the grain queue
+grain_queue = queue.Queue(maxsize=100)  # Max size to prevent overproduction
+
+# Event to control the stopping of the grain producer thread
+stop_event = Event()
+
+# Start the grain production thread
+producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
+producer_thread.daemon = True
+producer_thread.start()
+
+# Start the sounddevice output stream with the callback
+stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain_size, device=usb_device_index)
+
+# Pre-fill the grain queue to ensure smooth playback
+print("Pre-filling grain queue...")
+while not grain_queue.full():
+    start_position = random.randint(0, len(data) - grain_size)
+    grain = generate_grain(data, start_position, grain_size, pitch_shift)
+    grain_queue.put_nowait(grain)
+
+# Keyboard handling for real-time control
+def handle_keyboard_input():
+    global move_playhead, playhead_direction, pitch_shift, random_extent
+    
+    while True:
+        if keyboard.is_pressed('f'):  # Move playhead forward once
+            move_playhead = False
+            playhead_direction = 1
+            break
+        elif keyboard.is_pressed('b'):  # Move playhead backward once
+            move_playhead = False
+            playhead_direction = -1
+            break
+        elif keyboard.is_pressed('k'):  # Keep moving playhead in current direction
+            move_playhead = not move_playhead
+            break
+        elif keyboard.is_pressed('r'):  # Reverse grain playback
+            pitch_shift *= -1  # Reverse the pitch shift direction
+            break
+        elif keyboard.is_pressed('u'):  # Increase randomness around playhead
+            random_extent += 0.1  # Increase randomness
+            break
+        elif keyboard.is_pressed('i'):  # Decrease randomness around playhead
+            random_extent = max(0, random_extent - 0.1)  # Decrease randomness
+            break
+
+# Start a thread for keyboard handling
+keyboard_thread = Thread(target=handle_keyboard_input)
+keyboard_thread.daemon = True
+keyboard_thread.start()
+
+# Start the audio stream and let it run indefinitely
+with stream:
+    print("Granular synthesis running. Press Ctrl+C to stop.")
+    try:
+        while True:
+            sd.sleep(1000)  # Keep the main thread alive
+    except KeyboardInterrupt:
+        print("Stopping the granular synthesis.")
+        stop_event.set()  # Stop the grain producer thread
+        producer_thread.join()  # Wait for the thread to finish
