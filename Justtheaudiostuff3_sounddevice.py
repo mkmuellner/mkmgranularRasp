@@ -169,10 +169,13 @@ if keyboard_input_enabled:
         keyboard_input_enabled, grain_queue, move_playhead, playhead_direction, mix, 
         grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
         grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
-        min_grain_size_ms, max_grain_density, min_grain_density
+        min_grain_size_ms, max_grain_density, min_grain_density,
+        apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
+        apply_random_grain_density, apply_random_position
     ))
     keyboard_thread.daemon = True
     keyboard_thread.start()
+
 
 # Start the audio stream and let it run indefinitely
 with stream:
