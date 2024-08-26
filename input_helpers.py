@@ -60,7 +60,8 @@ def handle_keyboard_input(
         return  # Skip keyboard handling if disabled
 
     while True:
-        key = input_with_timeout('', timeout=0.1)  # Wait for input
+        key = input("Press a key: ")  # Simple blocking input for testing
+
         if key == 'f':  # Move playhead forward once
             move_playhead = False
             playhead_direction = 1
@@ -70,39 +71,9 @@ def handle_keyboard_input(
         elif key == 'k':  # Keep moving playhead in current direction
             move_playhead = not move_playhead
         elif key == 'u':  # Increase randomness around playhead
-            random_extent += 0.1  # Increase randomness
+            random_extent += 0.1
         elif key == 'i':  # Decrease randomness around playhead
-            random_extent = max(0, random_extent - 0.1)  # Decrease randomness
-        elif key == 'm':  # Increase mix towards reversed grains
-            mix = min(1.0, mix + 0.1)
-            print(f"Mix: {mix}")
-        elif key == 'n':  # Increase mix towards normal grains
-            mix = max(0.0, mix - 0.1)
-            print(f"Mix: {mix}")
-        elif key == '+':  # Increase grain size by 50 ms
-            grain_size_ms = min(grain_size_ms + 50, 10000)  # Cap at 10 seconds
-            print(f"Grain Size: {grain_size_ms} ms")
-        elif key == '-':  # Decrease grain size by 50 ms
-            grain_size_ms = max(grain_size_ms - 50, min_grain_size_ms)
-            print(f"Grain Size: {grain_size_ms} ms")
-        elif key == 'e':  # Change envelope type
-            current_envelope_index = (current_envelope_index + 1) % len(envelope_options)
-            envelope_type = envelope_options[current_envelope_index]
-            print(f"Envelope: {envelope_type}")
-        elif key == 'v':  # Increase random variation around grain size by 50%
-            random_grain_variation += 50
-            print(f"Random Grain Variation: {random_grain_variation}%")
-        elif key == 'c':  # Decrease random variation around grain size by 50%
-            random_grain_variation = max(0, random_grain_variation - 50)
-            print(f"Random Grain Variation: {random_grain_variation}%")
-        elif key == 'p':  # Increase playhead speed by 10%
-            playhead_speed += 0.1
-            print(f"Playhead Speed: {playhead_speed}")
-        elif key == 'l':  # Decrease playhead speed by 10%
-            playhead_speed = max(0.1, playhead_speed - 0.1)  # Minimum playhead speed is 0.1
-            print(f"Playhead Speed: {playhead_speed}")
-
-        # New key bindings to toggle the booleans
+            random_extent = max(0, random_extent - 0.1)
         elif key == 'y':  # Toggle pitch application
             apply_pitch = not apply_pitch
             print(f"Pitch Application: {apply_pitch}")
@@ -127,4 +98,5 @@ def handle_keyboard_input(
             with grain_queue.mutex:
                 grain_queue.queue.clear()
 
-    return apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
+        # Return the updated boolean states
+        return apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
