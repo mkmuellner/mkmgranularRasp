@@ -3,6 +3,7 @@ import sounddevice as sd
 import soundfile as sf
 from threading import Thread
 import queue
+import random
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
@@ -18,6 +19,7 @@ usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 grain_size = 2048     # Size of each grain in samples
 grain_interval = 1024  # Hop size for each grain (overlap or gap between grains)
 pitch_shift = 1.0      # Modify pitch by stretching or compressing the grains (1.0 means no pitch shift)
+random_offset = 500    # Maximum random offset (in samples) from the current position of the playhead
 
 # Envelope Types
 def apply_envelope(grain, envelope_type='linear'):
@@ -61,11 +63,20 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
     return grain
 
 # Function to handle producing grains in a separate thread
-def grain_producer(data, grain_size, grain_interval, pitch_shift):
+def grain_producer(data, grain_size, grain_interval, pitch_shift, random_offset):
     current_position = 0
     while True:
-        grain = generate_grain(data, current_position, grain_size, pitch_shift)
+        # Introduce random offset to the start position
+        start_position = current_position + random.randint(-random_offset, random_offset)
+        
+        # Ensure start_position stays within bounds
+        start_position = max(0, min(len(data) - grain_size, start_position))
+        
+        # Generate grain at randomized start position
+        grain = generate_grain(data, start_position, grain_size, pitch_shift)
         grain_queue.put(grain)
+
+        # Move playhead forward by grain_interval
         current_position += grain_interval
         if current_position >= len(data):
             current_position = 0
@@ -88,7 +99,7 @@ def audio_callback(outdata, frames, time, status):
 grain_queue = queue.Queue()
 
 # Start the grain production thread
-producer_thread = Thread(target=grain_producer, args=(data, grain_size, grain_interval, pitch_shift))
+producer_thread = Thread(target=grain_producer, args=(data, grain_size, grain_interval, pitch_shift, random_offset))
 producer_thread.daemon = True
 producer_thread.start()
 
@@ -97,7 +108,7 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain
 
 # Start the audio stream and let it run indefinitely
 with stream:
-    print("Granular synthesis running with effects. Press Ctrl+C to stop.")
+    print("Granular synthesis running with randomization. Press Ctrl+C to stop.")
     try:
         while True:
             sd.sleep(1000)  # Keep the main thread alive
