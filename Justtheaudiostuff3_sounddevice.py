@@ -51,18 +51,14 @@ def apply_envelope(grain, envelope_type='linear'):
 
     return grain * envelope
 
-# Granulation Function with Envelope
+# Granulation Function with Envelope and Grain Reversal
 def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_type='linear'):
     end_sample = min(len(data), start_sample + grain_size)
     grain = data[start_sample:end_sample]
 
-    # Pitch shifting or reversing
-    if pitch_shift != 1.0:
-        grain = np.interp(
-            np.arange(0, len(grain), pitch_shift),
-            np.arange(0, len(grain)),
-            grain
-        )
+    # Reverse the grain if pitch_shift is negative
+    if pitch_shift < 0:
+        grain = grain[::-1]  # Reverse the grain samples
     
     # Apply envelope
     grain = apply_envelope(grain, envelope_type)
