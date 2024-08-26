@@ -173,9 +173,8 @@ if keyboard_input_enabled:
         apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
         apply_random_grain_density, apply_random_position
     ))
-    keyboard_thread.daemon = True
+    keyboard_thread.daemon = True  # Daemon thread will exit when the main program exits
     keyboard_thread.start()
-
 
 # Start the audio stream and let it run indefinitely
 with stream:
