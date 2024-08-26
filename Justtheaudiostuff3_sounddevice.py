@@ -124,8 +124,8 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to
 print("Pre-filling grain queue...")
 while not grain_queue.full():  # Only fill if there's space in the queue
     try:
-        start_position = np.random.randint(0, len(data) - ms_to_samples(grain_size_ms))
-        grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
+        start_position = np.random.randint(0, len(data) - ms_to_samples(grain_size_ms, fs))
+        grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms,fs), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
         grain_queue.put_nowait(grain)
     except queue.Full:
         # If the queue is full, stop pre-filling
