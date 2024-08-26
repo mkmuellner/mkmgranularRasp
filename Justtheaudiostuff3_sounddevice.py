@@ -4,12 +4,14 @@ import soundfile as sf
 from threading import Thread
 import queue
 
-# Import any additional DSP effects or custom functions you had in the original code
-# from your_original_effects_module import your_effect_function_1, your_effect_function_2
-
-# Audio settings
+# Audio settings - updated with the correct filename
 filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
+
+# Convert to mono if the audio data is stereo
+if len(data.shape) > 1:
+    data = np.mean(data, axis=1)  # Average the two channels to convert to mono
+
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
 # Granular synthesis parameters
@@ -39,16 +41,17 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
     grain = data[start_sample:end_sample]
 
     # Pitch shifting
-    interpolated_grain = np.interp(
-        np.arange(0, len(grain), pitch_shift),
-        np.arange(0, len(grain)),
-        grain
-    )
+    if pitch_shift != 1.0:
+        grain = np.interp(
+            np.arange(0, len(grain), pitch_shift),
+            np.arange(0, len(grain)),
+            grain
+        )
     
     # Apply envelope
-    interpolated_grain = apply_envelope(interpolated_grain, envelope_type)
+    grain = apply_envelope(grain, envelope_type)
     
-    return interpolated_grain
+    return grain
 
 # Function to handle producing grains in a separate thread
 def grain_producer(data, grain_size, grain_interval, pitch_shift):
