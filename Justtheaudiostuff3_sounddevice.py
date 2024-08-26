@@ -23,6 +23,8 @@ mix = 0.5                 # Determines the probability of using regular or rever
 random_grain_variation = 0  # Percent variation in grain size
 envelope_type = 'soft'    # Default envelope type
 random_grain_density_factor = 0  # Percent variation in grain density (default 0%)
+grain_pitch = 1.0         # Grain pitch (1.0 is normal)
+random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
 
 # Audio settings - using the correct filename
 filename = 'Ashlight_Sample-29.wav'
@@ -66,16 +68,26 @@ def apply_envelope(grain, envelope_type):
 
     return grain * envelope
 
-# Granulation Function with Envelope and Mix between Normal and Reversed Audio
-def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5):
+# Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
+def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
     if random.random() < mix:
         data_source = reverse_data  # Use reversed data
     else:
         data_source = normal_data   # Use normal data
     
+    # Apply pitch variation
+    variation_factor = 1 + (pitch_variation / 100.0) * (random.random() - 0.5) * 2
+    effective_pitch = pitch * variation_factor
+    
     end_sample = min(len(data_source), start_sample + grain_size_samples)
     grain = data_source[start_sample:end_sample]
+    
+    # Apply pitch shifting
+    if effective_pitch != 1.0:
+        grain = np.interp(np.arange(0, len(grain), effective_pitch),
+                          np.arange(0, len(grain)),
+                          grain)
 
     # Apply envelope
     grain = apply_envelope(grain, envelope_type)
@@ -84,14 +96,14 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor
+    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor, grain_pitch, random_pitch_variation
     
     current_position = 0
     
     while not stop_event.is_set():
         # Apply random variation to grain size
-        variation_factor = 1 + (random_grain_variation / 100.0) * (random.random() - 0.5) * 2
-        grain_size_samples = ms_to_samples(grain_size_ms * variation_factor)
+        size_variation_factor = 1 + (random_grain_variation / 100.0) * (random.random() - 0.5) * 2
+        grain_size_samples = ms_to_samples(grain_size_ms * size_variation_factor)
         
         # Apply random variation to grain density
         random_density_variation = 1 + (random_grain_density_factor / 100.0) * (random.random() - 0.5) * 2
@@ -114,8 +126,8 @@ def grain_producer(grain_queue, stop_event):
         # Ensure start_position stays within bounds
         start_position = max(0, min(len(data) - grain_size_samples, start_position))
         
-        # Generate grain at randomized start position from normal or reverse buffer
-        grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix)
+        # Generate grain at randomized start position from normal or reverse buffer with pitch
+        grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
         
         try:
             grain_queue.put_nowait(grain)  # Use non-blocking put
@@ -166,7 +178,7 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to
 print("Pre-filling grain queue...")
 while not grain_queue.full():
     start_position = random.randint(0, len(data) - ms_to_samples(grain_size_ms))
-    grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix)
+    grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
     grain_queue.put_nowait(grain)
 
 # Non-blocking input method using select
@@ -199,10 +211,14 @@ def print_key_mappings():
     print("h: Halve grain density")
     print("r: Increase random grain density by 50%")
     print("t: Decrease random grain density by 50%")
+    print("z: Increase pitch by 10%")
+    print("x: Decrease pitch by 10%")
+    print("q: Increase random pitch variation by 50%")
+    print("w: Decrease random pitch variation by 50%")
 
 # Main loop for keyboard input handling
 def handle_keyboard_input():
-    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, grain_density, random_grain_density_factor
+    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation
     
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
@@ -261,9 +277,21 @@ def handle_keyboard_input():
         elif key == 't':  # Decrease random variation around grain density by 50%
             random_grain_density_factor = max(0, random_grain_density_factor - 50)
             print(f"Random Grain Density Factor: {random_grain_density_factor}%")
+        elif key == 'z':  # Increase pitch by 10%
+            grain_pitch += 0.1
+            print(f"Grain Pitch: {grain_pitch}")
+        elif key == 'x':  # Decrease pitch by 10%
+            grain_pitch = max(0.1, grain_pitch - 0.1)  # Minimum pitch is 0.1
+            print(f"Grain Pitch: {grain_pitch}")
+        elif key == 'q':  # Increase random pitch variation by 50%
+            random_pitch_variation += 50
+            print(f"Random Pitch Variation: {random_pitch_variation}%")
+        elif key == 'w':  # Decrease random pitch variation by 50%
+            random_pitch_variation = max(0, random_pitch_variation - 50)
+            print(f"Random Pitch Variation: {random_pitch_variation}%")
 
         # Clear the grain queue after significant changes
-        if key in {'+', '-', 'g', 'h', 'r', 't'}:
+        if key in {'+', '-', 'g', 'h', 'r', 't', 'z', 'x', 'q', 'w'}:
             with grain_queue.mutex:
                 grain_queue.queue.clear()
 
