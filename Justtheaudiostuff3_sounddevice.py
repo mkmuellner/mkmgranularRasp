@@ -102,7 +102,7 @@ def grain_producer(grain_queue, stop_event):
             current_position %= len(data)  # Loop around if necessary
 
         # Sleep for the calculated grain interval to match the grain density
-        #time.sleep(1 / effective_grain_density)
+        time.sleep(1 / effective_grain_density)
 
 
 
