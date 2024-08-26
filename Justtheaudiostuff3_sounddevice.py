@@ -44,32 +44,35 @@ def ms_to_samples(ms):
     return int(ms * fs / 1000)
 
 # Envelope Types
+# Smoother Envelope Function
 def apply_envelope(grain, envelope_type):
     length = len(grain)
-    if envelope_type == 'linear':
+    
+    # Use smoother Hanning window by default
+    if envelope_type == 'soft':
+        envelope = np.hanning(length)  # Smoother envelope with gradual fade-in and fade-out
+    elif envelope_type == 'linear':
         envelope = np.linspace(0, 1, length // 2)
         envelope = np.concatenate((envelope, envelope[::-1]))  # Symmetric fade in/out
     elif envelope_type == 'exponential':
         envelope = np.linspace(1, 0.1, length)
-    elif envelope_type == 'soft':  # Softer envelope
-        envelope = np.hanning(length)
     elif envelope_type == 'gaussian':
         mean = length // 2
         std_dev = length // 6
         envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2))
     else:
-        envelope = np.ones(length)  # No envelope
+        envelope = np.ones(length)  # No envelope (not recommended for click reduction)
     
     # Ensure the lengths match by trimming or padding if necessary
-    if len(envelope) != len(grain):
-        min_length = min(len(envelope), len(grain))
-        envelope = envelope[:min_length]
-        grain = grain[:min_length]
+    min_length = min(len(envelope), len(grain))
+    envelope = envelope[:min_length]
+    grain = grain[:min_length]
 
     return grain * envelope
 
 # Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
 # Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
+# Granulation Function with Smoother Envelope and Potential Overlap
 def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
     if random.random() < mix:
@@ -97,17 +100,14 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
                 grain = np.interp(interp_points,
                                   np.arange(0, len(grain)),
                                   grain)
-            else:
-                print("Interpolation skipped due to insufficient points.")
         except ValueError:
-            print("Pitch variation caused invalid grain length. Skipping pitch shift.")
             effective_pitch = 1.0  # Reset to normal pitch
     
     # Ensure the grain array is valid
     if len(grain) == 0:
         grain = data_source[start_sample:end_sample]  # Fallback to original grain if pitch causes problems
 
-    # Apply envelope
+    # Apply a smooth envelope to the grain
     grain = apply_envelope(grain, envelope_type)
     
     return grain
