@@ -4,7 +4,7 @@ import soundfile as sf
 from threading import Thread
 import queue
 
-# Audio settings - updated with the correct filename
+# Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
 
@@ -33,6 +33,13 @@ def apply_envelope(grain, envelope_type='linear'):
         envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2))
     else:
         envelope = np.ones(length)  # No envelope
+    
+    # Ensure the lengths match by trimming or padding if necessary
+    if len(envelope) != len(grain):
+        min_length = min(len(envelope), len(grain))
+        envelope = envelope[:min_length]
+        grain = grain[:min_length]
+
     return grain * envelope
 
 # Granulation Function with Envelope
