@@ -81,11 +81,14 @@ def grain_producer(grain_queue, stop_event):
         start_position = np.clip(start_position, 0, len(data) - grain_size_samples)
 
         # Generate the grain
+        # In grain_producer()
         grain = generate_grain(
             data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, 
             pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
-            apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, apply_random_grain_size=apply_random_grain_size
+            apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, 
+            apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
         )
+
 
         try:
             grain_queue.put_nowait(grain)  # Non-blocking put
