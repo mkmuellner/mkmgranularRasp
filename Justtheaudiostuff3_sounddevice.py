@@ -150,11 +150,13 @@ while not grain_queue.full():  # Only fill if there's space in the queue
                                envelope_type=envelope_type, mix=mix, pitch=grain_pitch, 
                                pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
                                apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, 
-                               apply_random_grain_size=apply_random_grain_size)
+                               apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation)
         grain_queue.put_nowait(grain)
     except queue.Full:
         print("Grain queue is full, stopping pre-fill.")
         break
+
+
 
 
 # Start a thread for keyboard handling, only if keyboard input is enabled
