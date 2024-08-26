@@ -69,8 +69,16 @@ def grain_producer():
     
     current_position = 0
     while True:
-        # Introduce random offset to the start position
-        start_position = current_position + random.randint(-random_offset, random_offset)
+        # Determine valid random offset range
+        if current_position < random_offset:
+            # If near the beginning, only allow positive offset
+            start_position = current_position + random.randint(0, random_offset)
+        elif current_position > (len(data) - grain_size - random_offset):
+            # If near the end, only allow negative offset
+            start_position = current_position - random.randint(0, random_offset)
+        else:
+            # In the middle, allow both positive and negative offsets
+            start_position = current_position + random.randint(-random_offset, random_offset)
         
         # Ensure start_position stays within bounds
         start_position = max(0, min(len(data) - grain_size, start_position))
