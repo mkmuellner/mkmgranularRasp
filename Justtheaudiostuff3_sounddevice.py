@@ -9,7 +9,7 @@ import select
 import os
 
 # Import helper functions from audio_helpers.py
-from audio_helpers import ms_to_samples, apply_envelope, generate_gra
+from audio_helpers import ms_to_samples, apply_envelope, generate_grain
 from input_helpers import print_key_mappings, handle_keyboard_input
 
 # Global variables
