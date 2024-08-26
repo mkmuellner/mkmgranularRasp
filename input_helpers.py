@@ -28,6 +28,14 @@ def print_key_mappings():
     print("q: Increase random pitch variation by 50%")
     print("w: Decrease random pitch variation by 50%")
 
+    # New toggles for boolean controls
+    print("y: Toggle pitch application on/off")
+    print("t: Toggle envelope application on/off")
+    print("r: Toggle random pitch variation on/off")
+    print("g: Toggle random grain size variation on/off")
+    print("d: Toggle random grain density variation on/off")
+    print("z: Toggle random position variation on/off")
+
 # Non-blocking input method using select
 def input_with_timeout(prompt, timeout=0.1):
     sys.stdout.write(prompt)
