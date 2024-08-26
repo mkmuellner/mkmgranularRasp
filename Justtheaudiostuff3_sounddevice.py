@@ -186,10 +186,12 @@ def print_key_mappings():
     print("e: Change envelope type")
     print("v: Increase random variation around grain size by 50%")
     print("c: Decrease random variation around grain size by 50%")
+    print("p: Increase playhead speed by 10%")
+    print("l: Decrease playhead speed by 10%")
 
 # Main loop for keyboard input handling
 def handle_keyboard_input():
-    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation
+    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed
     
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
@@ -230,6 +232,12 @@ def handle_keyboard_input():
         elif key == 'c':  # Decrease random variation around grain size by 50%
             random_grain_variation = max(0, random_grain_variation - 50)
             print(f"Random Grain Variation: {random_grain_variation}%")
+        elif key == 'p':  # Increase playhead speed by 10%
+            playhead_speed += 0.1
+            print(f"Playhead Speed: {playhead_speed}")
+        elif key == 'l':  # Decrease playhead speed by 10%
+            playhead_speed = max(0.1, playhead_speed - 0.1)  # Minimum playhead speed is 0.1
+            print(f"Playhead Speed: {playhead_speed}")
 
 # Start a thread for keyboard handling
 print_key_mappings()
