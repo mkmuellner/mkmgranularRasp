@@ -27,7 +27,7 @@ grain_pitch = 1.0         # Grain pitch (1.0 is normal)
 random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
 
 # Audio settings - using the correct filename
-filename = 'Ashlight_Sample-29.wav'
+filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
 
 # Convert to mono if the audio data is stereo
