@@ -92,7 +92,11 @@ def grain_producer(grain_queue, stop_event):
         
         # Generate grain at randomized start position
         grain = generate_grain(data, start_position, grain_size, pitch_shift)
-        grain_queue.put(grain)
+        
+        try:
+            grain_queue.put_nowait(grain)  # Use non-blocking put
+        except queue.Full:
+            pass  # If the queue is full, just skip adding this grain
 
         # Move playhead forward if allowed
         if move_playhead:
@@ -132,8 +136,11 @@ producer_thread.start()
 stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain_size, device=usb_device_index)
 
 # Pre-fill the grain queue to ensure smooth playback
-for _ in range(grain_queue.maxsize // 2):
-    grain_producer(grain_queue, stop_event)
+print("Pre-filling grain queue...")
+while not grain_queue.full():
+    start_position = random.randint(0, len(data) - grain_size)
+    grain = generate_grain(data, start_position, grain_size, pitch_shift)
+    grain_queue.put_nowait(grain)
 
 # Start the audio stream and let it run indefinitely
 with stream:
