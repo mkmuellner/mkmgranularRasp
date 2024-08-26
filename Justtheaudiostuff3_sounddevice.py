@@ -11,12 +11,12 @@ import select
 # Global variables for easy adjustment (e.g., via GPIO input)
 grain_size = 2048         # Size of each grain in samples
 grain_density = 20        # Grains per second
-pitch_shift = 1.0         # Pitch shifting factor (1.0 = normal, -1.0 = reverse)
 random_offset = 500       # Base random offset for grain start position
 random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
 move_playhead = False     # Flag to determine if the playhead moves (default: False)
 playhead_speed = 1.0      # Speed at which the playhead moves when advancing
 playhead_direction = 1    # 1 for forward, -1 for backward
+mix = 0.5                 # Determines the probability of using regular or reverse audio
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
@@ -25,6 +25,9 @@ data, fs = sf.read(filename, dtype='float32')  # Load audio file
 # Convert to mono if the audio data is stereo
 if len(data.shape) > 1:
     data = np.mean(data, axis=1)  # Average the two channels to convert to mono
+
+# Prepare two buffers: one normal, one reversed
+data_reverse = data[::-1]  # Create reversed buffer
 
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
@@ -51,15 +54,17 @@ def apply_envelope(grain, envelope_type='linear'):
 
     return grain * envelope
 
-# Granulation Function with Envelope and Grain Reversal
-def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_type='linear'):
-    end_sample = min(len(data), start_sample + grain_size)
-    grain = data[start_sample:end_sample]
-
-    # Reverse the grain if pitch_shift is negative
-    if pitch_shift < 0:
-        grain = grain[::-1]  # Reverse the grain samples
+# Granulation Function with Envelope and Mix between Normal and Reversed Audio
+def generate_grain(normal_data, reverse_data, start_sample, grain_size, envelope_type='linear', mix=0.5):
+    # Randomly select whether to use normal or reversed buffer based on mix parameter
+    if random.random() < mix:
+        data_source = reverse_data  # Use reversed data
+    else:
+        data_source = normal_data   # Use normal data
     
+    end_sample = min(len(data_source), start_sample + grain_size)
+    grain = data_source[start_sample:end_sample]
+
     # Apply envelope
     grain = apply_envelope(grain, envelope_type)
     
@@ -67,7 +72,7 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size, grain_density, pitch_shift, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction
+    global grain_size, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix
     
     current_position = 0
     grain_interval_samples = int((fs // grain_density) * playhead_speed)  # Adjust speed of playhead
@@ -90,8 +95,8 @@ def grain_producer(grain_queue, stop_event):
         # Ensure start_position stays within bounds
         start_position = max(0, min(len(data) - grain_size, start_position))
         
-        # Generate grain at randomized start position
-        grain = generate_grain(data, start_position, grain_size, pitch_shift)
+        # Generate grain at randomized start position from normal or reverse buffer
+        grain = generate_grain(data, data_reverse, start_position, grain_size, envelope_type='linear', mix=mix)
         
         try:
             grain_queue.put_nowait(grain)  # Use non-blocking put
@@ -141,7 +146,7 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain
 print("Pre-filling grain queue...")
 while not grain_queue.full():
     start_position = random.randint(0, len(data) - grain_size)
-    grain = generate_grain(data, start_position, grain_size, pitch_shift)
+    grain = generate_grain(data, data_reverse, start_position, grain_size, envelope_type='linear', mix=mix)
     grain_queue.put_nowait(grain)
 
 # Non-blocking input method using select
@@ -155,7 +160,7 @@ def input_with_timeout(prompt, timeout=0.1):
 
 # Main loop for keyboard input handling
 def handle_keyboard_input():
-    global move_playhead, playhead_direction, pitch_shift, random_extent
+    global move_playhead, playhead_direction, mix, random_extent
     
     while True:
         key = input_with_timeout('', timeout=0.1)  # Wait for input
@@ -167,12 +172,16 @@ def handle_keyboard_input():
             playhead_direction = -1
         elif key == 'k':  # Keep moving playhead in current direction
             move_playhead = not move_playhead
-        elif key == 'r':  # Reverse grain playback
-            pitch_shift *= -1  # Reverse the pitch shift direction
         elif key == 'u':  # Increase randomness around playhead
             random_extent += 0.1  # Increase randomness
         elif key == 'i':  # Decrease randomness around playhead
             random_extent = max(0, random_extent - 0.1)  # Decrease randomness
+        elif key == 'm':  # Increase mix towards reversed grains
+            mix = min(1.0, mix + 0.1)
+            print(f"Mix: {mix}")
+        elif key == 'n':  # Increase mix towards normal grains
+            mix = max(0.0, mix - 0.1)
+            print(f"Mix: {mix}")
 
 # Start a thread for keyboard handling
 keyboard_thread = Thread(target=handle_keyboard_input)
