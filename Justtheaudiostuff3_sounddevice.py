@@ -11,7 +11,9 @@ import select
 # Global variables
 grain_size_ms = 200       # Grain size in milliseconds (will be converted to samples)
 min_grain_size_ms = 50    # Minimum grain size in milliseconds
-grain_density = 20        # Grains per second
+grain_density = 20        # Grains per second (default)
+min_grain_density = 0.5   # Minimum grain density (1 grain every 2 seconds)
+max_grain_density = 40    # Maximum grain density
 random_offset = 500       # Base random offset for grain start position
 random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
 move_playhead = False     # Flag to determine if the playhead moves (default: False)
@@ -20,6 +22,7 @@ playhead_direction = 1    # 1 for forward, -1 for backward
 mix = 0.5                 # Determines the probability of using regular or reverse audio
 random_grain_variation = 0  # Percent variation in grain size
 envelope_type = 'soft'    # Default envelope type
+random_grain_density_factor = 0  # Percent variation in grain density (default 0%)
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
@@ -81,7 +84,7 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type
+    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor
     
     current_position = 0
     
@@ -89,6 +92,10 @@ def grain_producer(grain_queue, stop_event):
         # Apply random variation to grain size
         variation_factor = 1 + (random_grain_variation / 100.0) * (random.random() - 0.5) * 2
         grain_size_samples = ms_to_samples(grain_size_ms * variation_factor)
+        
+        # Apply random variation to grain density
+        random_density_variation = 1 + (random_grain_density_factor / 100.0) * (random.random() - 0.5) * 2
+        effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
         
         # Apply the extent of randomness to the random offset
         effective_random_offset = int(random_offset * random_extent)
@@ -116,7 +123,7 @@ def grain_producer(grain_queue, stop_event):
             pass  # If the queue is full, just skip adding this grain
 
         # Move playhead forward or backward if allowed
-        grain_interval_samples = int((fs // grain_density) * playhead_speed)
+        grain_interval_samples = int((fs // effective_grain_density) * playhead_speed)
         if move_playhead:
             current_position += grain_interval_samples * playhead_direction
             if current_position >= len(data):
@@ -124,8 +131,8 @@ def grain_producer(grain_queue, stop_event):
             elif current_position < 0:
                 current_position = len(data) - grain_size_samples
 
-        # Control the rate of grain production based on grain density
-        time.sleep(1 / grain_density)
+        # Control the rate of grain production based on effective grain density
+        time.sleep(1 / effective_grain_density)
 
 # Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
@@ -188,10 +195,14 @@ def print_key_mappings():
     print("c: Decrease random variation around grain size by 50%")
     print("p: Increase playhead speed by 10%")
     print("l: Decrease playhead speed by 10%")
+    print("g: Double grain density")
+    print("h: Halve grain density")
+    print("r: Increase random grain density by 50%")
+    print("t: Decrease random grain density by 50%")
 
 # Main loop for keyboard input handling
 def handle_keyboard_input():
-    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed
+    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, grain_density, random_grain_density_factor
     
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
@@ -238,6 +249,18 @@ def handle_keyboard_input():
         elif key == 'l':  # Decrease playhead speed by 10%
             playhead_speed = max(0.1, playhead_speed - 0.1)  # Minimum playhead speed is 0.1
             print(f"Playhead Speed: {playhead_speed}")
+        elif key == 'g':  # Double grain density
+            grain_density = min(max_grain_density, grain_density * 2)
+            print(f"Grain Density: {grain_density} grains/second")
+        elif key == 'h':  # Halve grain density
+            grain_density = max(min_grain_density, grain_density / 2)
+            print(f"Grain Density: {grain_density} grains/second")
+        elif key == 'r':  # Increase random variation around grain density by 50%
+            random_grain_density_factor += 50
+            print(f"Random Grain Density Factor: {random_grain_density_factor}%")
+        elif key == 't':  # Decrease random variation around grain density by 50%
+            random_grain_density_factor = max(0, random_grain_density_factor - 50)
+            print(f"Random Grain Density Factor: {random_grain_density_factor}%")
 
 # Start a thread for keyboard handling
 print_key_mappings()
