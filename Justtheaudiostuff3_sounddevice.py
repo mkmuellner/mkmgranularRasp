@@ -29,6 +29,13 @@ envelope_type = 'soft'    # Default envelope type
 random_grain_density_factor = 0  # Percent variation in grain density (default 0%)
 grain_pitch = 1.0         # Grain pitch (1.0 is normal)
 random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
+# Binary variables to control function execution
+apply_pitch = True
+apply_envelope = True
+apply_random_pitch = True
+apply_random_grain_size = True
+apply_random_grain_density = True
+apply_random_position = True
 
 # Global variable to control keyboard input
 keyboard_input_enabled = True  # Set to False by default
