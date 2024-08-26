@@ -61,6 +61,9 @@ def grain_producer(grain_queue, stop_event):
     current_position = 0
 
     while not stop_event.is_set():
+        # Calculate grain size samples
+        grain_size_samples = ms_to_samples(grain_size_ms, fs)
+
         # Apply random variation to grain density if enabled
         if apply_random_grain_density:
             random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
@@ -78,7 +81,11 @@ def grain_producer(grain_queue, stop_event):
         start_position = np.clip(start_position, 0, len(data) - grain_size_samples)
 
         # Generate the grain
-        grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
+        grain = generate_grain(
+            data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, 
+            pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
+            apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, apply_random_grain_size=apply_random_grain_size
+        )
 
         try:
             grain_queue.put_nowait(grain)  # Non-blocking put
@@ -92,6 +99,7 @@ def grain_producer(grain_queue, stop_event):
 
         # Sleep for the calculated grain interval to match the grain density
         time.sleep(1 / effective_grain_density)
+
 
 
 # Audio Callback Function for Real-Time Playback
