@@ -31,14 +31,15 @@ keyboard_input_enabled = False  # Set to False by default
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
-data, fs = sf.read(filename, dtype='float16')  # Load audio file in float16
+data, fs = sf.read(filename, dtype='float32')  # Load audio file in float32
 
 # Convert to mono if the audio data is stereo
 if len(data.shape) > 1:
-    data = np.mean(data, axis=1).astype('float16')  # Convert to mono in lower precision
+    data = np.mean(data, axis=1).astype('float32')  # Convert to mono in float32
 
-# Prepare two buffers: one normal, one reversed
-data_reverse = data[::-1].astype('float16')  # Create reversed buffer in lower precision
+# Convert the data to float16 for further processing (after loading)
+data = data.astype('float16')
+data_reverse = data[::-1].astype('float16')  # Create reversed buffer in float16
 
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
