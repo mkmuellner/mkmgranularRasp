@@ -10,7 +10,7 @@ import queue
 # Audio settings
 filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
-usb_device_index = 2  # Replace with your actual USB Soundblaster device index
+usb_device_index = 0  # Replace with your actual USB Soundblaster device index
 
 # Define your original effects function placeholders (as you may have already)
 def effect_1(grain):
