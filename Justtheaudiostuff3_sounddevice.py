@@ -27,7 +27,7 @@ grain_pitch = 1.0         # Grain pitch (1.0 is normal)
 random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
 
 # Global variable to control keyboard input
-keyboard_input_enabled = False  # Set to False by default
+keyboard_input_enabled = True  # Set to False by default
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
