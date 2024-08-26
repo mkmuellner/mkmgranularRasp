@@ -69,6 +69,7 @@ def apply_envelope(grain, envelope_type):
     return grain * envelope
 
 # Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
+# Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
 def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
     if random.random() < mix:
@@ -87,12 +88,17 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
     end_sample = min(len(data_source), start_sample + grain_size_samples)
     grain = data_source[start_sample:end_sample]
     
-    # Apply pitch shifting
-    if effective_pitch != 1.0:
+    # Only apply pitch shifting if there are enough samples in the grain
+    if len(grain) > 1 and effective_pitch != 1.0:
         try:
-            grain = np.interp(np.arange(0, len(grain), effective_pitch),
-                              np.arange(0, len(grain)),
-                              grain)
+            # Ensure we have enough points to interpolate
+            interp_points = np.arange(0, len(grain), effective_pitch)
+            if len(interp_points) > 1:  # Ensure that interpolation is possible
+                grain = np.interp(interp_points,
+                                  np.arange(0, len(grain)),
+                                  grain)
+            else:
+                print("Interpolation skipped due to insufficient points.")
         except ValueError:
             print("Pitch variation caused invalid grain length. Skipping pitch shift.")
             effective_pitch = 1.0  # Reset to normal pitch
