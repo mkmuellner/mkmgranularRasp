@@ -8,8 +8,9 @@ import time
 import sys
 import select
 
-# Global variables for easy adjustment (e.g., via GPIO input)
-grain_size = 2048         # Size of each grain in samples
+# Global variables
+grain_size_ms = 200       # Grain size in milliseconds (will be converted to samples)
+min_grain_size_ms = 50    # Minimum grain size in milliseconds
 grain_density = 20        # Grains per second
 random_offset = 500       # Base random offset for grain start position
 random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
@@ -17,6 +18,8 @@ move_playhead = False     # Flag to determine if the playhead moves (default: Fa
 playhead_speed = 1.0      # Speed at which the playhead moves when advancing
 playhead_direction = 1    # 1 for forward, -1 for backward
 mix = 0.5                 # Determines the probability of using regular or reverse audio
+random_grain_variation = 0  # Percent variation in grain size
+envelope_type = 'soft'    # Default envelope type
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
@@ -31,14 +34,20 @@ data_reverse = data[::-1]  # Create reversed buffer
 
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
+# Function to convert grain size in ms to samples
+def ms_to_samples(ms):
+    return int(ms * fs / 1000)
+
 # Envelope Types
-def apply_envelope(grain, envelope_type='linear'):
+def apply_envelope(grain, envelope_type):
     length = len(grain)
     if envelope_type == 'linear':
         envelope = np.linspace(0, 1, length // 2)
         envelope = np.concatenate((envelope, envelope[::-1]))  # Symmetric fade in/out
     elif envelope_type == 'exponential':
         envelope = np.linspace(1, 0.1, length)
+    elif envelope_type == 'soft':  # Softer envelope
+        envelope = np.hanning(length)
     elif envelope_type == 'gaussian':
         mean = length // 2
         std_dev = length // 6
@@ -55,14 +64,14 @@ def apply_envelope(grain, envelope_type='linear'):
     return grain * envelope
 
 # Granulation Function with Envelope and Mix between Normal and Reversed Audio
-def generate_grain(normal_data, reverse_data, start_sample, grain_size, envelope_type='linear', mix=0.5):
+def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
     if random.random() < mix:
         data_source = reverse_data  # Use reversed data
     else:
         data_source = normal_data   # Use normal data
     
-    end_sample = min(len(data_source), start_sample + grain_size)
+    end_sample = min(len(data_source), start_sample + grain_size_samples)
     grain = data_source[start_sample:end_sample]
 
     # Apply envelope
@@ -72,12 +81,15 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size, envelope
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix
+    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type
     
     current_position = 0
-    grain_interval_samples = int((fs // grain_density) * playhead_speed)  # Adjust speed of playhead
     
     while not stop_event.is_set():
+        # Apply random variation to grain size
+        variation_factor = 1 + (random_grain_variation / 100.0) * (random.random() - 0.5) * 2
+        grain_size_samples = ms_to_samples(grain_size_ms * variation_factor)
+        
         # Apply the extent of randomness to the random offset
         effective_random_offset = int(random_offset * random_extent)
         
@@ -85,7 +97,7 @@ def grain_producer(grain_queue, stop_event):
         if current_position < effective_random_offset:
             # If near the beginning, only allow positive offset
             start_position = current_position + random.randint(0, effective_random_offset)
-        elif current_position > (len(data) - grain_size - effective_random_offset):
+        elif current_position > (len(data) - grain_size_samples - effective_random_offset):
             # If near the end, only allow negative offset
             start_position = current_position - random.randint(0, effective_random_offset)
         else:
@@ -93,10 +105,10 @@ def grain_producer(grain_queue, stop_event):
             start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
         
         # Ensure start_position stays within bounds
-        start_position = max(0, min(len(data) - grain_size, start_position))
+        start_position = max(0, min(len(data) - grain_size_samples, start_position))
         
         # Generate grain at randomized start position from normal or reverse buffer
-        grain = generate_grain(data, data_reverse, start_position, grain_size, envelope_type='linear', mix=mix)
+        grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix)
         
         try:
             grain_queue.put_nowait(grain)  # Use non-blocking put
@@ -104,12 +116,13 @@ def grain_producer(grain_queue, stop_event):
             pass  # If the queue is full, just skip adding this grain
 
         # Move playhead forward or backward if allowed
+        grain_interval_samples = int((fs // grain_density) * playhead_speed)
         if move_playhead:
             current_position += grain_interval_samples * playhead_direction
             if current_position >= len(data):
                 current_position = 0
             elif current_position < 0:
-                current_position = len(data) - grain_size
+                current_position = len(data) - grain_size_samples
 
         # Control the rate of grain production based on grain density
         time.sleep(1 / grain_density)
@@ -140,13 +153,13 @@ producer_thread.daemon = True
 producer_thread.start()
 
 # Start the sounddevice output stream with the callback
-stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain_size, device=usb_device_index)
+stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms), device=usb_device_index)
 
 # Pre-fill the grain queue to ensure smooth playback
 print("Pre-filling grain queue...")
 while not grain_queue.full():
-    start_position = random.randint(0, len(data) - grain_size)
-    grain = generate_grain(data, data_reverse, start_position, grain_size, envelope_type='linear', mix=mix)
+    start_position = random.randint(0, len(data) - ms_to_samples(grain_size_ms))
+    grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix)
     grain_queue.put_nowait(grain)
 
 # Non-blocking input method using select
@@ -158,9 +171,28 @@ def input_with_timeout(prompt, timeout=0.1):
         return sys.stdin.readline().strip()
     return None
 
+# Print key mappings at startup
+def print_key_mappings():
+    print("Key mappings:")
+    print("f: Move playhead forward")
+    print("b: Move playhead backward")
+    print("k: Toggle continuous playhead movement")
+    print("u: Increase randomness around playhead")
+    print("i: Decrease randomness around playhead")
+    print("m: Increase mix towards reversed grains")
+    print("n: Increase mix towards normal grains")
+    print("+: Increase grain size by 50 ms")
+    print("-: Decrease grain size by 50 ms")
+    print("e: Change envelope type")
+    print("v: Increase random variation around grain size by 50%")
+    print("c: Decrease random variation around grain size by 50%")
+
 # Main loop for keyboard input handling
 def handle_keyboard_input():
-    global move_playhead, playhead_direction, mix, random_extent
+    global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation
+    
+    envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
+    current_envelope_index = envelope_options.index(envelope_type)
     
     while True:
         key = input_with_timeout('', timeout=0.1)  # Wait for input
@@ -182,8 +214,25 @@ def handle_keyboard_input():
         elif key == 'n':  # Increase mix towards normal grains
             mix = max(0.0, mix - 0.1)
             print(f"Mix: {mix}")
+        elif key == '+':  # Increase grain size by 50 ms
+            grain_size_ms = min(grain_size_ms + 50, 10000)  # Cap at 10 seconds
+            print(f"Grain Size: {grain_size_ms} ms")
+        elif key == '-':  # Decrease grain size by 50 ms
+            grain_size_ms = max(grain_size_ms - 50, min_grain_size_ms)
+            print(f"Grain Size: {grain_size_ms} ms")
+        elif key == 'e':  # Change envelope type
+            current_envelope_index = (current_envelope_index + 1) % len(envelope_options)
+            envelope_type = envelope_options[current_envelope_index]
+            print(f"Envelope: {envelope_type}")
+        elif key == 'v':  # Increase random variation around grain size by 50%
+            random_grain_variation += 50
+            print(f"Random Grain Variation: {random_grain_variation}%")
+        elif key == 'c':  # Decrease random variation around grain size by 50%
+            random_grain_variation = max(0, random_grain_variation - 50)
+            print(f"Random Grain Variation: {random_grain_variation}%")
 
 # Start a thread for keyboard handling
+print_key_mappings()
 keyboard_thread = Thread(target=handle_keyboard_input)
 keyboard_thread.daemon = True
 keyboard_thread.start()
