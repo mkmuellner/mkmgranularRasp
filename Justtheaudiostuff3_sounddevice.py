@@ -5,7 +5,8 @@ from threading import Thread, Event
 import queue
 import random
 import time
-import keyboard
+import sys
+import select
 
 # Global variables for easy adjustment (e.g., via GPIO input)
 grain_size = 2048         # Size of each grain in samples
@@ -147,31 +148,35 @@ while not grain_queue.full():
     grain = generate_grain(data, start_position, grain_size, pitch_shift)
     grain_queue.put_nowait(grain)
 
-# Keyboard handling for real-time control
+# Non-blocking input method using select
+def input_with_timeout(prompt, timeout=0.1):
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    ready, _, _ = select.select([sys.stdin], [], [], timeout)
+    if ready:
+        return sys.stdin.readline().strip()
+    return None
+
+# Main loop for keyboard input handling
 def handle_keyboard_input():
     global move_playhead, playhead_direction, pitch_shift, random_extent
     
     while True:
-        if keyboard.is_pressed('f'):  # Move playhead forward once
+        key = input_with_timeout('', timeout=0.1)  # Wait for input
+        if key == 'f':  # Move playhead forward once
             move_playhead = False
             playhead_direction = 1
-            break
-        elif keyboard.is_pressed('b'):  # Move playhead backward once
+        elif key == 'b':  # Move playhead backward once
             move_playhead = False
             playhead_direction = -1
-            break
-        elif keyboard.is_pressed('k'):  # Keep moving playhead in current direction
+        elif key == 'k':  # Keep moving playhead in current direction
             move_playhead = not move_playhead
-            break
-        elif keyboard.is_pressed('r'):  # Reverse grain playback
+        elif key == 'r':  # Reverse grain playback
             pitch_shift *= -1  # Reverse the pitch shift direction
-            break
-        elif keyboard.is_pressed('u'):  # Increase randomness around playhead
+        elif key == 'u':  # Increase randomness around playhead
             random_extent += 0.1  # Increase randomness
-            break
-        elif keyboard.is_pressed('i'):  # Decrease randomness around playhead
+        elif key == 'i':  # Decrease randomness around playhead
             random_extent = max(0, random_extent - 0.1)  # Decrease randomness
-            break
 
 # Start a thread for keyboard handling
 keyboard_thread = Thread(target=handle_keyboard_input)
