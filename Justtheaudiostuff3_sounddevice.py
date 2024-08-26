@@ -1,14 +1,14 @@
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-from threading import Thread
+from threading import Thread, Event
 import queue
 import random
 import time
 
 # Global variables for easy adjustment (e.g., via GPIO input)
 grain_size = 2048         # Size of each grain in samples
-grain_density = 10        # Grains per second
+grain_density = 20        # Grains per second
 pitch_shift = 1.0         # Pitch shifting factor
 random_offset = 500       # Base random offset for grain start position
 random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
@@ -66,13 +66,13 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
     return grain
 
 # Function to handle producing grains in a separate thread
-def grain_producer():
+def grain_producer(grain_queue, stop_event):
     global grain_size, grain_density, pitch_shift, random_offset, random_extent, move_playhead
     
     current_position = 0
     grain_interval_samples = fs // grain_density  # Calculate interval in samples based on grain density
     
-    while True:
+    while not stop_event.is_set():
         # Apply the extent of randomness to the random offset
         effective_random_offset = int(random_offset * random_extent)
         
@@ -118,15 +118,22 @@ def audio_callback(outdata, frames, time, status):
         outdata.fill(0)  # Output silence if no grains are available
 
 # Initialize the grain queue
-grain_queue = queue.Queue()
+grain_queue = queue.Queue(maxsize=100)  # Max size to prevent overproduction
+
+# Event to control the stopping of the grain producer thread
+stop_event = Event()
 
 # Start the grain production thread
-producer_thread = Thread(target=grain_producer)
+producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
 producer_thread.daemon = True
 producer_thread.start()
 
 # Start the sounddevice output stream with the callback
 stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain_size, device=usb_device_index)
+
+# Pre-fill the grain queue to ensure smooth playback
+for _ in range(grain_queue.maxsize // 2):
+    grain_producer(grain_queue, stop_event)
 
 # Start the audio stream and let it run indefinitely
 with stream:
@@ -136,3 +143,5 @@ with stream:
             sd.sleep(1000)  # Keep the main thread alive
     except KeyboardInterrupt:
         print("Stopping the granular synthesis.")
+        stop_event.set()  # Stop the grain producer thread
+        producer_thread.join()  # Wait for the thread to finish
