@@ -8,6 +8,9 @@ import sys
 import select
 import os
 
+# Import helper functions from audio_helpers.py
+from audio_helpers import ms_to_samples, apply_envelope, generate_gra
+
 # Global variables
 grain_size_ms = 200       # Grain size in milliseconds (will be converted to samples)
 min_grain_size_ms = 50    # Minimum grain size in milliseconds
@@ -43,48 +46,6 @@ data_reverse = data[::-1].astype('float16')  # Create reversed buffer in float16
 
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
-# Function to convert grain size in ms to samples
-def ms_to_samples(ms):
-    return int(ms * fs / 1000)
-
-# Envelope Types with reduced precision
-def apply_envelope(grain, envelope_type):
-    length = len(grain)
-
-    # Use smoother Hanning window by default, reduced precision
-    if envelope_type == 'soft':
-        envelope = np.hanning(length).astype('float16')
-    elif envelope_type == 'linear':
-        envelope = np.linspace(0, 1, length // 2, dtype='float16')
-        envelope = np.concatenate((envelope, envelope[::-1]), dtype='float16')  # Symmetric fade in/out
-    elif envelope_type == 'exponential':
-        envelope = np.linspace(1, 0.1, length, dtype='float16')
-    elif envelope_type == 'gaussian':
-        mean, std_dev = length // 2, length // 6
-        envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2)).astype('float16')
-    else:
-        envelope = np.ones(length, dtype='float16')  # No envelope (not recommended)
-
-    return grain[:len(envelope)] * envelope  # Ensure the lengths match
-
-# Optimized grain generation
-def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
-    # Randomly select whether to use normal or reversed buffer based on mix parameter
-    data_source = reverse_data if np.random.random() < mix else normal_data
-
-    # Apply pitch variation
-    variation_factor = 1 + (pitch_variation / 100.0) * (np.random.random() - 0.5) * 2
-    effective_pitch = max(0.1, pitch * variation_factor)
-
-    # Generate grain window with interpolation if pitch is varied
-    grain = data_source[int(start_sample):int(start_sample) + int(grain_size_samples)]
-    if effective_pitch != 1.0 and len(grain) > 1:
-        interp_points = np.arange(0, len(grain), effective_pitch)
-        grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
-
-    grain = apply_envelope(grain, envelope_type)
-    return grain
-
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
     global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor, grain_pitch, random_pitch_variation
@@ -94,7 +55,7 @@ def grain_producer(grain_queue, stop_event):
     while not stop_event.is_set():
         # Apply random variation to grain size
         size_variation_factor = 1 + (random_grain_variation / 100.0) * (np.random.random() - 0.5) * 2
-        grain_size_samples = ms_to_samples(grain_size_ms * size_variation_factor)
+        grain_size_samples = ms_to_samples(grain_size_ms * size_variation_factor, fs)
 
         # Apply random variation to grain density
         random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
@@ -156,7 +117,7 @@ except PermissionError:
 producer_thread.start()
 
 # Start the sounddevice output stream with the callback
-stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms), device=usb_device_index)
+stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms, fs), device=usb_device_index)
 
 # Pre-fill the grain queue to ensure smooth playback
 print("Pre-filling grain queue...")
