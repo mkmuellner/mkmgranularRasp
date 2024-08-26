@@ -25,7 +25,7 @@ envelope_type = 'soft'    # Default envelope type
 random_grain_density_factor = 0  # Percent variation in grain density (default 0%)
 
 # Audio settings - using the correct filename
-filename = 'tori_amos_god_3.wav'
+filename = 'Ashlight_Sample-29.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
 
 # Convert to mono if the audio data is stereo
@@ -148,8 +148,8 @@ def audio_callback(outdata, frames, time, status):
     except queue.Empty:
         outdata.fill(0)  # Output silence if no grains are available
 
-# Initialize the grain queue
-grain_queue = queue.Queue(maxsize=100)  # Max size to prevent overproduction
+# Initialize the grain queue with a smaller size for faster response
+grain_queue = queue.Queue(maxsize=20)  # Reduced max size to improve responsiveness
 
 # Event to control the stopping of the grain producer thread
 stop_event = Event()
@@ -261,6 +261,11 @@ def handle_keyboard_input():
         elif key == 't':  # Decrease random variation around grain density by 50%
             random_grain_density_factor = max(0, random_grain_density_factor - 50)
             print(f"Random Grain Density Factor: {random_grain_density_factor}%")
+
+        # Clear the grain queue after significant changes
+        if key in {'+', '-', 'g', 'h', 'r', 't'}:
+            with grain_queue.mutex:
+                grain_queue.queue.clear()
 
 # Start a thread for keyboard handling
 print_key_mappings()
