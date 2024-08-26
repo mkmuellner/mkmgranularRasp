@@ -43,6 +43,8 @@ def handle_keyboard_input(
     grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
     min_grain_size_ms, max_grain_density, min_grain_density
 ):
+    global apply_pitch, apply_envelope, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
+
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
 
@@ -91,32 +93,29 @@ def handle_keyboard_input(
         elif key == 'l':  # Decrease playhead speed by 10%
             playhead_speed = max(0.1, playhead_speed - 0.1)  # Minimum playhead speed is 0.1
             print(f"Playhead Speed: {playhead_speed}")
-        elif key == 'g':  # Double grain density
-            grain_density = min(max_grain_density, grain_density * 2)
-            print(f"Grain Density: {grain_density} grains/second")
-        elif key == 'h':  # Halve grain density
-            grain_density = max(min_grain_density, grain_density / 2)
-            print(f"Grain Density: {grain_density} grains/second")
-        elif key == 'r':  # Increase random variation around grain density by 50%
-            random_grain_density_factor += 50
-            print(f"Random Grain Density Factor: {random_grain_density_factor}%")
-        elif key == 't':  # Decrease random variation around grain density by 50%
-            random_grain_density_factor = max(0, random_grain_density_factor - 50)
-            print(f"Random Grain Density Factor: {random_grain_density_factor}%")
-        elif key == 'z':  # Increase pitch by 10%
-            grain_pitch += 0.1
-            print(f"Grain Pitch: {grain_pitch}")
-        elif key == 'x':  # Decrease pitch by 10%
-            grain_pitch = max(0.1, grain_pitch - 0.1)  # Minimum pitch is 0.1
-            print(f"Grain Pitch: {grain_pitch}")
-        elif key == 'q':  # Increase random pitch variation by 50%
-            random_pitch_variation += 50
-            print(f"Random Pitch Variation: {random_pitch_variation}%")
-        elif key == 'w':  # Decrease random pitch variation by 50%
-            random_pitch_variation = max(0, random_pitch_variation - 50)
-            print(f"Random Pitch Variation: {random_pitch_variation}%")
+
+        # Add key bindings to toggle the new binary variables
+        elif key == 'y':  # Toggle pitch application
+            apply_pitch = not apply_pitch
+            print(f"Pitch Application: {apply_pitch}")
+        elif key == 't':  # Toggle envelope application
+            apply_envelope = not apply_envelope
+            print(f"Envelope Application: {apply_envelope}")
+        elif key == 'r':  # Toggle random pitch variation
+            apply_random_pitch = not apply_random_pitch
+            print(f"Random Pitch Variation: {apply_random_pitch}")
+        elif key == 'g':  # Toggle random grain size variation
+            apply_random_grain_size = not apply_random_grain_size
+            print(f"Random Grain Size Variation: {apply_random_grain_size}")
+        elif key == 'd':  # Toggle random grain density variation
+            apply_random_grain_density = not apply_random_grain_density
+            print(f"Random Grain Density Variation: {apply_random_grain_density}")
+        elif key == 'z':  # Toggle random position variation
+            apply_random_position = not apply_random_position
+            print(f"Random Position Variation: {apply_random_position}")
 
         # Clear the grain queue after significant changes
-        if key in {'+', '-', 'g', 'h', 'r', 't', 'z', 'x', 'q', 'w'}:
+        if key in {'+', '-', 'y', 't', 'r', 'g', 'd', 'z'}:
             with grain_queue.mutex:
                 grain_queue.queue.clear()
+
