@@ -193,10 +193,16 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to
 
 # Pre-fill the grain queue to ensure smooth playback
 print("Pre-filling grain queue...")
-while not grain_queue.full():
-    start_position = random.randint(0, len(data) - ms_to_samples(grain_size_ms))
-    grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
-    grain_queue.put_nowait(grain)
+while not grain_queue.full():  # Only fill if there's space in the queue
+    try:
+        start_position = random.randint(0, len(data) - ms_to_samples(grain_size_ms))
+        grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
+        grain_queue.put_nowait(grain)
+    except queue.Full:
+        # If the queue is full, stop pre-filling
+        print("Grain queue is full, stopping pre-fill.")
+        break
+
 
 # Non-blocking input method using select
 def input_with_timeout(prompt, timeout=0.1):
