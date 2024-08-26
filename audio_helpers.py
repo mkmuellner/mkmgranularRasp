@@ -24,16 +24,32 @@ def apply_envelope(grain, envelope_type):
     return grain[:len(envelope)] * envelope
 
 def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
+    # Randomly select whether to use normal or reversed buffer based on mix parameter
     data_source = reverse_data if np.random.random() < mix else normal_data
 
-    variation_factor = 1 + (pitch_variation / 100.0) * (np.random.random() - 0.5) * 2
-    effective_pitch = max(0.1, pitch * variation_factor)
+    # Apply random grain size variation if enabled
+    if apply_random_grain_size:
+        variation_factor = 1 + (random_grain_variation / 100.0) * (np.random.random() - 0.5) * 2
+        grain_size_samples = int(grain_size_samples * variation_factor)
 
+    # Generate grain window
     grain = data_source[int(start_sample):int(start_sample) + int(grain_size_samples)]
-    
-    if effective_pitch != 1.0 and len(grain) > 1:
-        interp_points = np.arange(0, len(grain), effective_pitch)
-        grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
 
-    grain = apply_envelope(grain, envelope_type)
+    # Apply pitch variation if enabled
+    if apply_pitch:
+        if apply_random_pitch:
+            variation_factor = 1 + (pitch_variation / 100.0) * (np.random.random() - 0.5) * 2
+            effective_pitch = max(0.1, pitch * variation_factor)
+        else:
+            effective_pitch = pitch
+
+        if effective_pitch != 1.0 and len(grain) > 1:
+            interp_points = np.arange(0, len(grain), effective_pitch)
+            grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
+
+    # Apply envelope if enabled
+    if apply_envelope:
+        grain = apply_envelope(grain, envelope_type)
+
     return grain
+
