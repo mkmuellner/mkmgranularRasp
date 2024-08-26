@@ -132,7 +132,7 @@ producer_thread.daemon = True
 
 # Reduce the nice value of the current process to give higher priority (requires root)
 try:
-    os.nice(-10)  # Set a lower nice value for higher priority (range -20 to 19, lower is higher priority)
+    os.nice(-15)  # Set a lower nice value for higher priority (range -20 to 19, lower is higher priority)
 except PermissionError:
     print("Permission denied: cannot change process priority without root permissions.")
 
