@@ -56,27 +56,28 @@ usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor, grain_pitch, random_pitch_variation
+    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix
 
     current_position = 0
 
     while not stop_event.is_set():
-        # Apply random variation to grain size
-        size_variation_factor = 1 + (random_grain_variation / 100.0) * (np.random.random() - 0.5) * 2
-        grain_size_samples = ms_to_samples(grain_size_ms * size_variation_factor, fs)
+        # Apply random variation to grain density if enabled
+        if apply_random_grain_density:
+            random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
+            effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
+        else:
+            effective_grain_density = grain_density
 
-        # Apply random variation to grain density
-        random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
-        effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
+        # Apply random position if enabled
+        if apply_random_position:
+            effective_random_offset = int(random_offset * random_extent)
+            start_position = current_position + int(np.random.uniform(-effective_random_offset, effective_random_offset))
+        else:
+            start_position = current_position
 
-        # Apply the extent of randomness to the random offset
-        effective_random_offset = int(random_offset * random_extent)
-
-        # Adjust start position using numpy's random
-        start_position = current_position + int(np.random.uniform(-effective_random_offset, effective_random_offset))
         start_position = np.clip(start_position, 0, len(data) - grain_size_samples)
 
-        # Generate grain at randomized start position
+        # Generate the grain
         grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
 
         try:
@@ -91,6 +92,7 @@ def grain_producer(grain_queue, stop_event):
 
         # Sleep for the calculated grain interval to match the grain density
         time.sleep(1 / effective_grain_density)
+
 
 # Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
