@@ -77,7 +77,7 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
     effective_pitch = max(0.1, pitch * variation_factor)
 
     # Generate grain window with interpolation if pitch is varied
-    grain = data_source[start_sample:start_sample + grain_size_samples]
+    grain = data_source[int(start_sample):int(start_sample) + int(grain_size_samples)]
     if effective_pitch != 1.0 and len(grain) > 1:
         interp_points = np.arange(0, len(grain), effective_pitch)
         grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
