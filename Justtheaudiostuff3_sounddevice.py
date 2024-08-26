@@ -3,10 +3,10 @@ import sounddevice as sd
 import soundfile as sf
 from threading import Thread, Event
 import queue
-import random
 import time
 import sys
 import select
+import os
 
 # Global variables
 grain_size_ms = 200       # Grain size in milliseconds (will be converted to samples)
@@ -26,16 +26,19 @@ random_grain_density_factor = 0  # Percent variation in grain density (default 0
 grain_pitch = 1.0         # Grain pitch (1.0 is normal)
 random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
 
+# Global variable to control keyboard input
+keyboard_input_enabled = False  # Set to False by default
+
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
-data, fs = sf.read(filename, dtype='float32')  # Load audio file
+data, fs = sf.read(filename, dtype='float16')  # Load audio file in float16
 
 # Convert to mono if the audio data is stereo
 if len(data.shape) > 1:
-    data = np.mean(data, axis=1)  # Average the two channels to convert to mono
+    data = np.mean(data, axis=1).astype('float16')  # Convert to mono in lower precision
 
 # Prepare two buffers: one normal, one reversed
-data_reverse = data[::-1]  # Create reversed buffer
+data_reverse = data[::-1].astype('float16')  # Create reversed buffer in lower precision
 
 usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
@@ -43,125 +46,81 @@ usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 def ms_to_samples(ms):
     return int(ms * fs / 1000)
 
-# Envelope Types
-# Smoother Envelope Function
+# Envelope Types with reduced precision
 def apply_envelope(grain, envelope_type):
     length = len(grain)
-    
-    # Use smoother Hanning window by default
+
+    # Use smoother Hanning window by default, reduced precision
     if envelope_type == 'soft':
-        envelope = np.hanning(length)  # Smoother envelope with gradual fade-in and fade-out
+        envelope = np.hanning(length).astype('float16')
     elif envelope_type == 'linear':
-        envelope = np.linspace(0, 1, length // 2)
-        envelope = np.concatenate((envelope, envelope[::-1]))  # Symmetric fade in/out
+        envelope = np.linspace(0, 1, length // 2, dtype='float16')
+        envelope = np.concatenate((envelope, envelope[::-1]), dtype='float16')  # Symmetric fade in/out
     elif envelope_type == 'exponential':
-        envelope = np.linspace(1, 0.1, length)
+        envelope = np.linspace(1, 0.1, length, dtype='float16')
     elif envelope_type == 'gaussian':
-        mean = length // 2
-        std_dev = length // 6
-        envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2))
+        mean, std_dev = length // 2, length // 6
+        envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2)).astype('float16')
     else:
-        envelope = np.ones(length)  # No envelope (not recommended for click reduction)
-    
-    # Ensure the lengths match by trimming or padding if necessary
-    min_length = min(len(envelope), len(grain))
-    envelope = envelope[:min_length]
-    grain = grain[:min_length]
+        envelope = np.ones(length, dtype='float16')  # No envelope (not recommended)
 
-    return grain * envelope
+    return grain[:len(envelope)] * envelope  # Ensure the lengths match
 
-# Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
-# Granulation Function with Envelope, Pitch, and Mix between Normal and Reversed Audio
-# Granulation Function with Smoother Envelope and Potential Overlap
+# Optimized grain generation
 def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
-    if random.random() < mix:
-        data_source = reverse_data  # Use reversed data
-    else:
-        data_source = normal_data   # Use normal data
-    
-    # Apply pitch variation
-    variation_factor = 1 + (pitch_variation / 100.0) * (random.random() - 0.5) * 2
-    effective_pitch = pitch * variation_factor
-    
-    # Ensure effective pitch does not cause invalid interpolation
-    if effective_pitch <= 0:
-        effective_pitch = 1.0  # Default to normal pitch if invalid
-    
-    end_sample = min(len(data_source), start_sample + grain_size_samples)
-    grain = data_source[start_sample:end_sample]
-    
-    # Only apply pitch shifting if there are enough samples in the grain
-    if len(grain) > 1 and effective_pitch != 1.0:
-        try:
-            # Ensure we have enough points to interpolate
-            interp_points = np.arange(0, len(grain), effective_pitch)
-            if len(interp_points) > 1:  # Ensure that interpolation is possible
-                grain = np.interp(interp_points,
-                                  np.arange(0, len(grain)),
-                                  grain)
-        except ValueError:
-            effective_pitch = 1.0  # Reset to normal pitch
-    
-    # Ensure the grain array is valid
-    if len(grain) == 0:
-        grain = data_source[start_sample:end_sample]  # Fallback to original grain if pitch causes problems
+    data_source = reverse_data if np.random.random() < mix else normal_data
 
-    # Apply a smooth envelope to the grain
+    # Apply pitch variation
+    variation_factor = 1 + (pitch_variation / 100.0) * (np.random.random() - 0.5) * 2
+    effective_pitch = max(0.1, pitch * variation_factor)
+
+    # Generate grain window with interpolation if pitch is varied
+    grain = data_source[start_sample:start_sample + grain_size_samples]
+    if effective_pitch != 1.0 and len(grain) > 1:
+        interp_points = np.arange(0, len(grain), effective_pitch)
+        grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
+
     grain = apply_envelope(grain, envelope_type)
-    
     return grain
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
     global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor, grain_pitch, random_pitch_variation
-    
+
     current_position = 0
-    grain_interval = 1 / grain_density  # Calculate the time interval between grains
-    
+
     while not stop_event.is_set():
         # Apply random variation to grain size
-        size_variation_factor = 1 + (random_grain_variation / 100.0) * (random.random() - 0.5) * 2
+        size_variation_factor = 1 + (random_grain_variation / 100.0) * (np.random.random() - 0.5) * 2
         grain_size_samples = ms_to_samples(grain_size_ms * size_variation_factor)
-        
+
         # Apply random variation to grain density
-        random_density_variation = 1 + (random_grain_density_factor / 100.0) * (random.random() - 0.5) * 2
+        random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
         effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
-        grain_interval = 1 / effective_grain_density
-        
+
         # Apply the extent of randomness to the random offset
         effective_random_offset = int(random_offset * random_extent)
-        
-        # Determine valid random offset range
-        if current_position < effective_random_offset:
-            start_position = current_position + random.randint(0, effective_random_offset)
-        elif current_position > (len(data) - grain_size_samples - effective_random_offset):
-            start_position = current_position - random.randint(0, effective_random_offset)
-        else:
-            start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
-        
-        # Ensure start_position stays within bounds
-        start_position = max(0, min(len(data) - grain_size_samples, start_position))
-        
+
+        # Adjust start position using numpy's random
+        start_position = current_position + int(np.random.uniform(-effective_random_offset, effective_random_offset))
+        start_position = np.clip(start_position, 0, len(data) - grain_size_samples)
+
         # Generate grain at randomized start position
         grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
-        
+
         try:
             grain_queue.put_nowait(grain)  # Non-blocking put
         except queue.Full:
             pass  # Skip adding this grain if queue is full
 
         # Move playhead forward or backward if allowed
-        grain_interval_samples = int((fs // effective_grain_density) * playhead_speed)
         if move_playhead:
-            current_position += grain_interval_samples * playhead_direction
-            if current_position >= len(data):
-                current_position = 0
-            elif current_position < 0:
-                current_position = len(data) - grain_size_samples
+            current_position += int(fs // effective_grain_density) * playhead_speed * playhead_direction
+            current_position %= len(data)  # Loop around if necessary
 
         # Sleep for the calculated grain interval to match the grain density
-        time.sleep(grain_interval)
+        time.sleep(1 / effective_grain_density)
 
 # Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
@@ -177,8 +136,8 @@ def audio_callback(outdata, frames, time, status):
     except queue.Empty:
         outdata.fill(0)  # Output silence if no grains are available
 
-# Initialize the grain queue with a smaller size for faster response
-grain_queue = queue.Queue(maxsize=50)  # Reduced max size to improve responsiveness
+# Initialize the grain queue with a larger size for better buffering
+grain_queue = queue.Queue(maxsize=100)  # Increased max size for more buffering
 
 # Event to control the stopping of the grain producer thread
 stop_event = Event()
@@ -186,6 +145,13 @@ stop_event = Event()
 # Start the grain production thread
 producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
 producer_thread.daemon = True
+
+# Reduce the nice value of the current process to give higher priority (requires root)
+try:
+    os.nice(-10)  # Set a lower nice value for higher priority (range -20 to 19, lower is higher priority)
+except PermissionError:
+    print("Permission denied: cannot change process priority without root permissions.")
+
 producer_thread.start()
 
 # Start the sounddevice output stream with the callback
@@ -195,14 +161,13 @@ stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to
 print("Pre-filling grain queue...")
 while not grain_queue.full():  # Only fill if there's space in the queue
     try:
-        start_position = random.randint(0, len(data) - ms_to_samples(grain_size_ms))
+        start_position = np.random.randint(0, len(data) - ms_to_samples(grain_size_ms))
         grain = generate_grain(data, data_reverse, start_position, ms_to_samples(grain_size_ms), envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
         grain_queue.put_nowait(grain)
     except queue.Full:
         # If the queue is full, stop pre-filling
         print("Grain queue is full, stopping pre-fill.")
         break
-
 
 # Non-blocking input method using select
 def input_with_timeout(prompt, timeout=0.1):
@@ -242,10 +207,13 @@ def print_key_mappings():
 # Main loop for keyboard input handling
 def handle_keyboard_input():
     global move_playhead, playhead_direction, mix, grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation
-    
+
     envelope_options = ['linear', 'exponential', 'soft', 'gaussian']
     current_envelope_index = envelope_options.index(envelope_type)
-    
+
+    if not keyboard_input_enabled:
+        return  # Skip keyboard handling if disabled
+
     while True:
         key = input_with_timeout('', timeout=0.1)  # Wait for input
         if key == 'f':  # Move playhead forward once
@@ -318,11 +286,12 @@ def handle_keyboard_input():
             with grain_queue.mutex:
                 grain_queue.queue.clear()
 
-# Start a thread for keyboard handling
-print_key_mappings()
-keyboard_thread = Thread(target=handle_keyboard_input)
-keyboard_thread.daemon = True
-keyboard_thread.start()
+# Start a thread for keyboard handling, only if keyboard input is enabled
+if keyboard_input_enabled:
+    print_key_mappings()
+    keyboard_thread = Thread(target=handle_keyboard_input)
+    keyboard_thread.daemon = True
+    keyboard_thread.start()
 
 # Start the audio stream and let it run indefinitely
 with stream:
