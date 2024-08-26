@@ -31,7 +31,7 @@ grain_pitch = 1.0         # Grain pitch (1.0 is normal)
 random_pitch_variation = 0  # Percent variation in grain pitch (default 0%)
 # Binary variables to control function execution
 apply_pitch = True
-apply_envelope = True
+envelope_enabled = True
 apply_random_pitch = True
 apply_random_grain_size = True
 apply_random_grain_density = True
@@ -85,9 +85,10 @@ def grain_producer(grain_queue, stop_event):
         grain = generate_grain(
             data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, 
             pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
-            apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, 
+            envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch, 
             apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
         )
+
 
 
         try:
@@ -146,11 +147,13 @@ while not grain_queue.full():  # Only fill if there's space in the queue
     try:
         grain_size_samples = ms_to_samples(grain_size_ms, fs)
         start_position = np.random.randint(0, len(data) - grain_size_samples)
-        grain = generate_grain(data, data_reverse, start_position, grain_size_samples, 
-                               envelope_type=envelope_type, mix=mix, pitch=grain_pitch, 
-                               pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
-                               apply_envelope=apply_envelope, apply_random_pitch=apply_random_pitch, 
-                               apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation)
+        grain = generate_grain(
+            data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, 
+            pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch, 
+            envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch, 
+            apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
+        )
+
         grain_queue.put_nowait(grain)
     except queue.Full:
         print("Grain queue is full, stopping pre-fill.")
