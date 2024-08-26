@@ -80,14 +80,26 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
     variation_factor = 1 + (pitch_variation / 100.0) * (random.random() - 0.5) * 2
     effective_pitch = pitch * variation_factor
     
+    # Ensure effective pitch does not cause invalid interpolation
+    if effective_pitch <= 0:
+        effective_pitch = 1.0  # Default to normal pitch if invalid
+    
     end_sample = min(len(data_source), start_sample + grain_size_samples)
     grain = data_source[start_sample:end_sample]
     
     # Apply pitch shifting
     if effective_pitch != 1.0:
-        grain = np.interp(np.arange(0, len(grain), effective_pitch),
-                          np.arange(0, len(grain)),
-                          grain)
+        try:
+            grain = np.interp(np.arange(0, len(grain), effective_pitch),
+                              np.arange(0, len(grain)),
+                              grain)
+        except ValueError:
+            print("Pitch variation caused invalid grain length. Skipping pitch shift.")
+            effective_pitch = 1.0  # Reset to normal pitch
+    
+    # Ensure the grain array is valid
+    if len(grain) == 0:
+        grain = data_source[start_sample:end_sample]  # Fallback to original grain if pitch causes problems
 
     # Apply envelope
     grain = apply_envelope(grain, envelope_type)
