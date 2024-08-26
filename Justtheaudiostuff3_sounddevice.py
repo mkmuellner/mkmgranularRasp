@@ -117,6 +117,7 @@ def grain_producer(grain_queue, stop_event):
     global grain_size_ms, grain_density, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction, mix, random_grain_variation, envelope_type, random_grain_density_factor, grain_pitch, random_pitch_variation
     
     current_position = 0
+    grain_interval = 1 / grain_density  # Calculate the time interval between grains
     
     while not stop_event.is_set():
         # Apply random variation to grain size
@@ -126,31 +127,29 @@ def grain_producer(grain_queue, stop_event):
         # Apply random variation to grain density
         random_density_variation = 1 + (random_grain_density_factor / 100.0) * (random.random() - 0.5) * 2
         effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
+        grain_interval = 1 / effective_grain_density
         
         # Apply the extent of randomness to the random offset
         effective_random_offset = int(random_offset * random_extent)
         
         # Determine valid random offset range
         if current_position < effective_random_offset:
-            # If near the beginning, only allow positive offset
             start_position = current_position + random.randint(0, effective_random_offset)
         elif current_position > (len(data) - grain_size_samples - effective_random_offset):
-            # If near the end, only allow negative offset
             start_position = current_position - random.randint(0, effective_random_offset)
         else:
-            # In the middle, allow both positive and negative offsets
             start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
         
         # Ensure start_position stays within bounds
         start_position = max(0, min(len(data) - grain_size_samples, start_position))
         
-        # Generate grain at randomized start position from normal or reverse buffer with pitch
+        # Generate grain at randomized start position
         grain = generate_grain(data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix, pitch=grain_pitch, pitch_variation=random_pitch_variation)
         
         try:
-            grain_queue.put_nowait(grain)  # Use non-blocking put
+            grain_queue.put_nowait(grain)  # Non-blocking put
         except queue.Full:
-            pass  # If the queue is full, just skip adding this grain
+            pass  # Skip adding this grain if queue is full
 
         # Move playhead forward or backward if allowed
         grain_interval_samples = int((fs // effective_grain_density) * playhead_speed)
@@ -161,8 +160,8 @@ def grain_producer(grain_queue, stop_event):
             elif current_position < 0:
                 current_position = len(data) - grain_size_samples
 
-        # Control the rate of grain production based on effective grain density
-        time.sleep(1 / effective_grain_density)
+        # Sleep for the calculated grain interval to match the grain density
+        time.sleep(grain_interval)
 
 # Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
