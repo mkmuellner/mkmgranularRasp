@@ -4,12 +4,14 @@ import soundfile as sf
 from threading import Thread
 import queue
 import random
+import time
 
 # Global variables for easy adjustment (e.g., via GPIO input)
 grain_size = 2048         # Size of each grain in samples
-grain_interval = 1024     # Hop size for each grain (overlap or gap between grains)
+grain_density = 10        # Grains per second
 pitch_shift = 1.0         # Pitch shifting factor
-random_offset = 500       # Maximum random offset for grain start position
+random_offset = 500       # Base random offset for grain start position
+random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
 move_playhead = False     # Flag to determine if the playhead moves (default: False)
 
 # Audio settings - using the correct filename
@@ -65,20 +67,25 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
 
 # Function to handle producing grains in a separate thread
 def grain_producer():
-    global grain_size, grain_interval, pitch_shift, random_offset, move_playhead
+    global grain_size, grain_density, pitch_shift, random_offset, random_extent, move_playhead
     
     current_position = 0
+    grain_interval_samples = fs // grain_density  # Calculate interval in samples based on grain density
+    
     while True:
+        # Apply the extent of randomness to the random offset
+        effective_random_offset = int(random_offset * random_extent)
+        
         # Determine valid random offset range
-        if current_position < random_offset:
+        if current_position < effective_random_offset:
             # If near the beginning, only allow positive offset
-            start_position = current_position + random.randint(0, random_offset)
-        elif current_position > (len(data) - grain_size - random_offset):
+            start_position = current_position + random.randint(0, effective_random_offset)
+        elif current_position > (len(data) - grain_size - effective_random_offset):
             # If near the end, only allow negative offset
-            start_position = current_position - random.randint(0, random_offset)
+            start_position = current_position - random.randint(0, effective_random_offset)
         else:
             # In the middle, allow both positive and negative offsets
-            start_position = current_position + random.randint(-random_offset, random_offset)
+            start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
         
         # Ensure start_position stays within bounds
         start_position = max(0, min(len(data) - grain_size, start_position))
@@ -89,9 +96,12 @@ def grain_producer():
 
         # Move playhead forward if allowed
         if move_playhead:
-            current_position += grain_interval
+            current_position += grain_interval_samples
             if current_position >= len(data):
                 current_position = 0
+        
+        # Control the rate of grain production based on grain density
+        time.sleep(1 / grain_density)
 
 # Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
