@@ -121,7 +121,7 @@ def audio_callback(outdata, frames, time, status):
         outdata.fill(0)  # Output silence if no grains are available
 
 # Initialize the grain queue with a larger size for better buffering
-grain_queue = queue.Queue(maxsize=100)  # Increased max size for more buffering
+grain_queue = queue.Queue(maxsize=20)  # Increased max size for more buffering
 
 # Event to control the stopping of the grain producer thread
 stop_event = Event()
