@@ -25,7 +25,7 @@ def apply_envelope(grain, envelope_type):
 
 def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples, 
                    envelope_type='soft', mix=0.5, pitch=1.0, pitch_variation=0,
-                   apply_pitch=True, apply_envelope=True, apply_random_pitch=True, 
+                   apply_pitch=True, envelope_enabled=True, apply_random_pitch=True, 
                    apply_random_grain_size=True, random_grain_variation=0):
     # Randomly select whether to use normal or reversed buffer based on mix parameter
     data_source = reverse_data if np.random.random() < mix else normal_data
@@ -51,9 +51,10 @@ def generate_grain(normal_data, reverse_data, start_sample, grain_size_samples,
             grain = np.interp(interp_points, np.arange(0, len(grain)), grain)
 
     # Apply envelope if enabled
-    if apply_envelope:
+    if envelope_enabled:
         grain = apply_envelope(grain, envelope_type)
 
     return grain
+
 
 
