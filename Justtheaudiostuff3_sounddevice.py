@@ -10,64 +10,62 @@ import queue
 # Audio settings
 filename = 'tori_amos_god_3.wav'
 data, fs = sf.read(filename, dtype='float32')  # Load audio file
-usb_device_index = 0  # Replace with your actual USB Soundblaster device index
+usb_device_index = 2  # Replace with your actual USB Soundblaster device index
 
-# Define your original effects function placeholders (as you may have already)
-def effect_1(grain):
-    # Placeholder for an effect function
-    # Replace with actual DSP effect
-    return grain
+# Granular synthesis parameters
+grain_size = 2048     # Size of each grain in samples
+grain_interval = 1024  # Hop size for each grain (overlap or gap between grains)
+pitch_shift = 1.0      # Modify pitch by stretching or compressing the grains (1.0 means no pitch shift)
 
-def effect_2(grain):
-    # Placeholder for another effect function
-    # Replace with actual DSP effect
-    return grain
+# Envelope Types
+def apply_envelope(grain, envelope_type='linear'):
+    length = len(grain)
+    if envelope_type == 'linear':
+        envelope = np.linspace(0, 1, length // 2)
+        envelope = np.concatenate((envelope, envelope[::-1]))  # Symmetric fade in/out
+    elif envelope_type == 'exponential':
+        envelope = np.linspace(1, 0.1, length)
+    elif envelope_type == 'gaussian':
+        mean = length // 2
+        std_dev = length // 6
+        envelope = np.exp(-0.5 * ((np.arange(length) - mean) ** 2) / (std_dev ** 2))
+    else:
+        envelope = np.ones(length)  # No envelope
+    return grain * envelope
 
-# Original Granulation Function, now updated to work with the new audio backend
-def generate_grain(data, start_sample, grain_size, pitch_shift=1.0):
-    # Extract a grain from the audio sample
+# Granulation Function with Envelope
+def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_type='linear'):
     end_sample = min(len(data), start_sample + grain_size)
     grain = data[start_sample:end_sample]
 
-    # Interpolating the grain for pitch shifting
+    # Pitch shifting
     interpolated_grain = np.interp(
         np.arange(0, len(grain), pitch_shift),
         np.arange(0, len(grain)),
         grain
     )
-
-    # Apply your effects (replace with your actual effect functions)
-    grain = effect_1(grain)
-    grain = effect_2(grain)
-
-    return grain
+    
+    # Apply envelope
+    interpolated_grain = apply_envelope(interpolated_grain, envelope_type)
+    
+    return interpolated_grain
 
 # Function to handle producing grains in a separate thread
 def grain_producer(data, grain_size, grain_interval, pitch_shift):
     current_position = 0
     while True:
-        # Generate the next grain
         grain = generate_grain(data, current_position, grain_size, pitch_shift)
-
-        # Place the grain in the queue for playback
         grain_queue.put(grain)
-
-        # Update the current position
         current_position += grain_interval
-
-        # If we've reached the end of the data, loop back to the beginning
         if current_position >= len(data):
             current_position = 0
 
-# Callback function for real-time audio playback
+# Audio Callback Function for Real-Time Playback
 def audio_callback(outdata, frames, time, status):
     if status:
         print(status)  # Print any errors or warnings
     try:
-        # Retrieve the next grain from the queue
         grain = grain_queue.get_nowait()
-
-        # Fill the output buffer with the grain, ensuring it matches the buffer size
         if len(grain) < len(outdata):
             outdata[:len(grain)] = grain.reshape(-1, 1)
             outdata[len(grain):] = 0  # Fill the rest with silence if grain is smaller
