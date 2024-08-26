@@ -5,14 +5,17 @@ from threading import Thread, Event
 import queue
 import random
 import time
+import keyboard
 
 # Global variables for easy adjustment (e.g., via GPIO input)
 grain_size = 2048         # Size of each grain in samples
 grain_density = 20        # Grains per second
-pitch_shift = 1.0         # Pitch shifting factor
+pitch_shift = 1.0         # Pitch shifting factor (1.0 = normal, -1.0 = reverse)
 random_offset = 500       # Base random offset for grain start position
 random_extent = 1.0       # Extent of randomness around the playhead (multiplier for random_offset)
 move_playhead = False     # Flag to determine if the playhead moves (default: False)
+playhead_speed = 1.0      # Speed at which the playhead moves when advancing
+playhead_direction = 1    # 1 for forward, -1 for backward
 
 # Audio settings - using the correct filename
 filename = 'tori_amos_god_3.wav'
@@ -52,7 +55,7 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
     end_sample = min(len(data), start_sample + grain_size)
     grain = data[start_sample:end_sample]
 
-    # Pitch shifting
+    # Pitch shifting or reversing
     if pitch_shift != 1.0:
         grain = np.interp(
             np.arange(0, len(grain), pitch_shift),
@@ -67,10 +70,10 @@ def generate_grain(data, start_sample, grain_size, pitch_shift=1.0, envelope_typ
 
 # Function to handle producing grains in a separate thread
 def grain_producer(grain_queue, stop_event):
-    global grain_size, grain_density, pitch_shift, random_offset, random_extent, move_playhead
+    global grain_size, grain_density, pitch_shift, random_offset, random_extent, move_playhead, playhead_speed, playhead_direction
     
     current_position = 0
-    grain_interval_samples = fs // grain_density  # Calculate interval in samples based on grain density
+    grain_interval_samples = int((fs // grain_density) * playhead_speed)  # Adjust speed of playhead
     
     while not stop_event.is_set():
         # Apply the extent of randomness to the random offset
@@ -78,77 +81,4 @@ def grain_producer(grain_queue, stop_event):
         
         # Determine valid random offset range
         if current_position < effective_random_offset:
-            # If near the beginning, only allow positive offset
-            start_position = current_position + random.randint(0, effective_random_offset)
-        elif current_position > (len(data) - grain_size - effective_random_offset):
-            # If near the end, only allow negative offset
-            start_position = current_position - random.randint(0, effective_random_offset)
-        else:
-            # In the middle, allow both positive and negative offsets
-            start_position = current_position + random.randint(-effective_random_offset, effective_random_offset)
-        
-        # Ensure start_position stays within bounds
-        start_position = max(0, min(len(data) - grain_size, start_position))
-        
-        # Generate grain at randomized start position
-        grain = generate_grain(data, start_position, grain_size, pitch_shift)
-        
-        try:
-            grain_queue.put_nowait(grain)  # Use non-blocking put
-        except queue.Full:
-            pass  # If the queue is full, just skip adding this grain
-
-        # Move playhead forward if allowed
-        if move_playhead:
-            current_position += grain_interval_samples
-            if current_position >= len(data):
-                current_position = 0
-        
-        # Control the rate of grain production based on grain density
-        time.sleep(1 / grain_density)
-
-# Audio Callback Function for Real-Time Playback
-def audio_callback(outdata, frames, time, status):
-    if status:
-        print(status)  # Print any errors or warnings
-    try:
-        grain = grain_queue.get_nowait()
-        if len(grain) < len(outdata):
-            outdata[:len(grain)] = grain.reshape(-1, 1)
-            outdata[len(grain):] = 0  # Fill the rest with silence if grain is smaller
-        else:
-            outdata[:] = grain[:frames].reshape(-1, 1)
-    except queue.Empty:
-        outdata.fill(0)  # Output silence if no grains are available
-
-# Initialize the grain queue
-grain_queue = queue.Queue(maxsize=100)  # Max size to prevent overproduction
-
-# Event to control the stopping of the grain producer thread
-stop_event = Event()
-
-# Start the grain production thread
-producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
-producer_thread.daemon = True
-producer_thread.start()
-
-# Start the sounddevice output stream with the callback
-stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=grain_size, device=usb_device_index)
-
-# Pre-fill the grain queue to ensure smooth playback
-print("Pre-filling grain queue...")
-while not grain_queue.full():
-    start_position = random.randint(0, len(data) - grain_size)
-    grain = generate_grain(data, start_position, grain_size, pitch_shift)
-    grain_queue.put_nowait(grain)
-
-# Start the audio stream and let it run indefinitely
-with stream:
-    print("Granular synthesis running. Press Ctrl+C to stop.")
-    try:
-        while True:
-            sd.sleep(1000)  # Keep the main thread alive
-    except KeyboardInterrupt:
-        print("Stopping the granular synthesis.")
-        stop_event.set()  # Stop the grain producer thread
-        producer_thread.join()  # Wait for the thread to finish
+            # If near the beginning, only allow po
