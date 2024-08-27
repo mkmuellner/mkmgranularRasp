@@ -4,15 +4,14 @@ import soundfile as sf
 from threading import Thread, Event, Lock
 import queue
 import time
-import os
-import sys
+import random
 from audio_helpers import ms_to_samples, apply_envelope, generate_grain
 from input_helpers import print_key_mappings, handle_keyboard_input
 
 # Global variables
 grain_size_ms = 200
 min_grain_size_ms = 50
-grain_density = 20
+grain_density = 20  # Number of grains per second
 min_grain_density = 0.5
 max_grain_density = 40
 random_offset = 500
@@ -26,6 +25,7 @@ envelope_type = 'soft'
 random_grain_density_factor = 0
 grain_pitch = 1.0
 random_pitch_variation = 0
+recycle_fraction = 0.5  # Fraction of grains that can be recycled
 
 # Binary variables
 apply_pitch = True
@@ -44,39 +44,60 @@ data = data.astype('float16')
 data_reverse = data[::-1].astype('float16')
 
 usb_device_index = 2
-grain_queue = queue.Queue(maxsize=50)  # Queue for storing pre-buffered grains
+grain_queue = queue.Queue(maxsize=50)  # Queue for storing batches of mixed grains
 stop_event = Event()
 lock = Lock()
 
-# Function to generate and pre-buffer grains
+# Function to generate and pre-buffer grains in batches
 def grain_producer(grain_queue, stop_event):
     current_position = 0
+    previous_grains = []  # List to keep track of previous grains for recycling
 
     while not stop_event.is_set():
-        grain_size_samples = ms_to_samples(grain_size_ms, fs)
+        grain_batch = np.zeros(ms_to_samples(grain_size_ms, fs), dtype=np.float32)  # Buffer to accumulate mixed grains
 
-        # Generate grain outside of callback
-        grain = generate_grain(
-            data, data_reverse, current_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
-            pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch,
-            envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch,
-            apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
-        )
+        num_grains = int(grain_density / (1000 / grain_size_ms))  # Calculate the number of grains to play in this batch
+        for _ in range(num_grains):
+            if random.random() < recycle_fraction and previous_grains:
+                # Recycle a previous grain
+                grain = random.choice(previous_grains)
+            else:
+                # Generate a new grain
+                grain_size_samples = ms_to_samples(grain_size_ms, fs)
+                start_position = np.random.randint(0, len(data) - grain_size_samples)
+                grain = generate_grain(
+                    data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
+                    pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch,
+                    envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch,
+                    apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
+                )
+
+                # Keep track of previous grains for recycling
+                previous_grains.append(grain)
+                if len(previous_grains) > 50:  # Limit the number of recycled grains to prevent memory issues
+                    previous_grains.pop(0)
+
+            # Mix the grain into the grain batch
+            grain_batch[:len(grain)] += grain
+
+        # Normalize the batch to avoid clipping
+        if np.max(np.abs(grain_batch)) > 1.0:
+            grain_batch /= np.max(np.abs(grain_batch))
 
         try:
-            grain_queue.put(grain, timeout=0.1)  # Timeout to prevent blocking
+            grain_queue.put(grain_batch, timeout=0.1)  # Add the mixed grain batch to the queue
         except queue.Full:
-            pass  # Skip adding this grain if queue is full
+            pass  # Skip adding this batch if the queue is full
 
         # Move playhead forward or backward if allowed
         if move_playhead:
             current_position += int(fs // grain_density) * playhead_speed * playhead_direction
             current_position %= len(data)  # Loop around if necessary
 
-        # Sleep for the grain interval to match the grain density
+        # Sleep for a short time before producing the next batch
         time.sleep(1 / grain_density)
 
-# Audio Callback Function for mixing pre-buffered grains
+# Audio Callback Function for processing the grain batches
 def audio_callback(outdata, frames, time, status):
     if status:
         print(status)
@@ -84,26 +105,25 @@ def audio_callback(outdata, frames, time, status):
     # Clear the output buffer (silence)
     outdata.fill(0)
 
-    # Fetch a grain from the queue and mix it into the output buffer
     try:
-        grain = grain_queue.get_nowait()
+        grain_batch = grain_queue.get_nowait()  # Fetch the pre-mixed batch of grains
 
-        # Ensure grain is the correct length for the current buffer
-        if len(grain) < frames:
-            # Pad grain with zeros if it's shorter than the expected frame size
-            padded_grain = np.zeros((frames,))
-            padded_grain[:len(grain)] = grain
-            grain = padded_grain
-        elif len(grain) > frames:
-            # Trim the grain if it's longer than the expected frame size
-            grain = grain[:frames]
+        # Ensure the batch is the correct length for the current buffer
+        if len(grain_batch) < frames:
+            # Pad batch with zeros if it's shorter than the expected frame size
+            padded_batch = np.zeros((frames,))
+            padded_batch[:len(grain_batch)] = grain_batch
+            grain_batch = padded_batch
+        elif len(grain_batch) > frames:
+            # Trim the batch if it's longer than the expected frame size
+            grain_batch = grain_batch[:frames]
 
-        # Mix the grain into the output buffer
+        # Apply the mixed grain batch to the output buffer
         if outdata.shape[1] == 2:  # Stereo
-            outdata[:, 0] += grain
-            outdata[:, 1] += grain
+            outdata[:, 0] += grain_batch
+            outdata[:, 1] += grain_batch
         else:  # Mono
-            outdata[:, 0] += grain
+            outdata[:, 0] += grain_batch
 
     except queue.Empty:
         pass  # If the queue is empty, play silence
