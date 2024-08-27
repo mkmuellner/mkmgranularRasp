@@ -11,10 +11,7 @@ from input_helpers import print_key_mappings, handle_keyboard_input
 # Global variables
 empty_queue_count = 0  # Counts how many times the grain_queue was empty
 grain_size_ms = 200
-min_grain_size_ms = 50
 grain_density = 20  # Number of grains per second
-min_grain_density = 0.5
-max_grain_density = 40
 random_offset = 500
 random_extent = 1.0
 move_playhead = False
@@ -23,7 +20,6 @@ playhead_direction = 1
 mix = 0.5
 random_grain_variation = 0
 envelope_type = 'soft'
-random_grain_density_factor = 0
 grain_pitch = 1.0
 random_pitch_variation = 0
 recycle_fraction = 0.5  # Fraction of grains that can be recycled
@@ -33,7 +29,6 @@ apply_pitch = True
 envelope_enabled = True
 apply_random_pitch = True
 apply_random_grain_size = True
-apply_random_grain_density = True
 apply_random_position = True
 
 # Audio settings
@@ -49,67 +44,44 @@ grain_queue = queue.Queue(maxsize=50)  # Queue for storing batches of mixed grai
 stop_event = Event()
 lock = Lock()
 
-# Function to generate and pre-buffer grains in batches
+# Function to generate grains and put them in the queue based on grain density
 def grain_producer(grain_queue, stop_event):
     current_position = 0
     previous_grains = []  # List to keep track of previous grains for recycling
+    grains_per_second = grain_density
+    grain_interval = 1.0 / grains_per_second  # Time between grains in seconds
 
     while not stop_event.is_set():
-        # Buffer to accumulate mixed grains, always based on current grain_size_ms
-        grain_batch = np.zeros(ms_to_samples(grain_size_ms, fs), dtype=np.float32)
+        # Generate a new grain
+        grain_size_samples = ms_to_samples(grain_size_ms, fs)
+        if random.random() < recycle_fraction and previous_grains:
+            # Recycle a previous grain
+            grain = random.choice(previous_grains)
+        else:
+            # Generate a new grain
+            start_position = np.random.randint(0, len(data) - grain_size_samples)
+            grain = generate_grain(
+                data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
+                pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch,
+                envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch,
+                apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
+            )
 
-        num_grains = int(grain_density / (1000 / grain_size_ms))  # Calculate the number of grains to play in this batch
-        for _ in range(num_grains):
-            if random.random() < recycle_fraction and previous_grains:
-                # Recycle a previous grain
-                grain = random.choice(previous_grains)
-            else:
-                # Generate a new grain
-                grain_size_samples = ms_to_samples(grain_size_ms, fs)
-                start_position = np.random.randint(0, len(data) - grain_size_samples)
-                grain = generate_grain(
-                    data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
-                    pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch,
-                    envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch,
-                    apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
-                )
+            # Keep track of previous grains for recycling
+            previous_grains.append(grain)
+            if len(previous_grains) > 50:  # Limit the number of recycled grains to prevent memory issues
+                previous_grains.pop(0)
 
-                # Keep track of previous grains for recycling
-                previous_grains.append(grain)
-                if len(previous_grains) > 50:  # Limit the number of recycled grains to prevent memory issues
-                    previous_grains.pop(0)
-
-            # Resize the grain to match the grain_batch size
-            if len(grain) < len(grain_batch):
-                # Pad the grain with zeros if it's shorter
-                padded_grain = np.zeros(len(grain_batch))
-                padded_grain[:len(grain)] = grain
-                grain = padded_grain
-            elif len(grain) > len(grain_batch):
-                # Trim the grain if it's longer than the grain_batch
-                grain = grain[:len(grain_batch)]
-
-            # Mix the grain into the grain_batch
-            grain_batch[:len(grain)] += grain
-
-        # Normalize the batch to avoid clipping
-        if np.max(np.abs(grain_batch)) > 1.0:
-            grain_batch /= np.max(np.abs(grain_batch))
-
+        # Put the grain in the queue
         try:
-            grain_queue.put(grain_batch, timeout=0.1)  # Add the mixed grain batch to the queue
+            grain_queue.put(grain, timeout=0.1)
         except queue.Full:
-            pass  # Skip adding this batch if the queue is full
+            pass  # Skip adding this grain if the queue is full
 
-        # Move playhead forward or backward if allowed
-        if move_playhead:
-            current_position += int(fs // grain_density) * playhead_speed * playhead_direction
-            current_position %= len(data)  # Loop around if necessary
+        # Sleep for the appropriate interval to maintain the grain density
+        time.sleep(grain_interval)
 
-        # Sleep for a short time before producing the next batch
-        time.sleep(1 / grain_density)
-
-# Audio Callback Function for processing the grain batches
+# Audio Callback Function for processing the grains and ensuring playback at the correct rate
 def audio_callback(outdata, frames, time, status):
     global empty_queue_count
 
@@ -120,56 +92,28 @@ def audio_callback(outdata, frames, time, status):
     outdata.fill(0)
 
     try:
-        grain_batch = grain_queue.get_nowait()  # Fetch the pre-mixed batch of grains
+        # Fetch the next grain from the queue
+        grain = grain_queue.get_nowait()
 
-        # Ensure the batch is the correct length for the current buffer
-        if len(grain_batch) < frames:
-            # Pad batch with zeros if it's shorter than the expected frame size
-            padded_batch = np.zeros((frames,))
-            padded_batch[:len(grain_batch)] = grain_batch
-            grain_batch = padded_batch
-        elif len(grain_batch) > frames:
-            # Trim the batch if it's longer than the expected frame size
-            grain_batch = grain_batch[:frames]
+        # Ensure the grain is the correct length for the current buffer
+        if len(grain) < frames:
+            # Pad the grain with zeros if it's shorter than the expected frame size
+            padded_grain = np.zeros((frames,))
+            padded_grain[:len(grain)] = grain
+            grain = padded_grain
+        elif len(grain) > frames:
+            # Trim the grain if it's longer than the expected frame size
+            grain = grain[:frames]
 
         # Apply the mixed grain batch to the output buffer
         if outdata.shape[1] == 2:  # Stereo
-            outdata[:, 0] += grain_batch
-            outdata[:, 1] += grain_batch
+            outdata[:, 0] += grain
+            outdata[:, 1] += grain
         else:  # Mono
-            outdata[:, 0] += grain_batch
+            outdata[:, 0] += grain
 
     except queue.Empty:
         empty_queue_count += 1  # Increment the counter when the queue is empty
-
-# Keyboard input thread
-def keyboard_input_thread():
-    global grain_size_ms, grain_density, playhead_speed, apply_pitch, envelope_enabled, mix
-    global move_playhead, playhead_direction, random_extent, random_grain_variation
-    global random_grain_density_factor, grain_pitch, apply_random_pitch, apply_random_grain_size
-    global apply_random_grain_density, apply_random_position
-
-    while True:
-        # Handle keyboard input and update the parameters
-        updated_params = handle_keyboard_input(
-            True, grain_queue, move_playhead, playhead_direction, mix,
-            grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed,
-            grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
-            min_grain_size_ms, max_grain_density, min_grain_density,
-            apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size,
-            apply_random_grain_density, apply_random_position
-        )
-
-        # Unpack and update global variables with the returned values
-        if updated_params:
-            (
-                move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed,
-                mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
-                envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density,
-                apply_random_position
-            ) = updated_params
-
-        time.sleep(0.1)  # Short sleep to avoid high CPU usage
 
 # Pre-fill the queue for smoother playback
 def prefill_queue():
@@ -193,14 +137,6 @@ if __name__ == "__main__":
     producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
     producer_thread.daemon = True
     producer_thread.start()
-
-    # Start keyboard input thread
-    keyboard_thread = Thread(target=keyboard_input_thread)
-    keyboard_thread.daemon = True
-    keyboard_thread.start()
-
-    # Print key mappings at the start of the program
-    print_key_mappings()
 
     # Start audio stream
     stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms, fs), device=usb_device_index)
