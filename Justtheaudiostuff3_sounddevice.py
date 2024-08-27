@@ -126,7 +126,10 @@ def audio_callback(outdata, frames, time, status):
     except queue.Empty:
         pass  # No new grain available
 
-    # Process active grains and mix them into the output
+    # Prepare a buffer to accumulate the grain data
+    grain_mix = np.zeros((frames,), dtype=np.float32)
+
+    # Process active grains and mix them into the grain_mix buffer
     finished_grains = []
     for i, grain in enumerate(active_grains):
         # Ensure grain is the correct length for the current buffer
@@ -140,15 +143,24 @@ def audio_callback(outdata, frames, time, status):
             # Trim the grain if it's longer than the expected frame size
             grain = grain[:frames]
 
-        # Mix the grain into the output buffer
-        if outdata.shape[1] == 2:  # Stereo
-            outdata += np.column_stack((grain, grain))  # Add grain to both channels
-        else:  # Mono
-            outdata[:, 0] += grain
+        # Mix the grain into the grain_mix buffer
+        grain_mix += grain
 
     # Remove finished grains from the active list
     for i in reversed(finished_grains):
         del active_grains[i]
+
+    # Normalize the grain mix to avoid overflow (prevent signal from exceeding [-1, 1])
+    if np.max(np.abs(grain_mix)) > 1.0:
+        grain_mix /= np.max(np.abs(grain_mix))
+
+    # Apply the mixed grain data to the output buffer
+    if outdata.shape[1] == 2:  # Stereo
+        outdata[:, 0] += grain_mix
+        outdata[:, 1] += grain_mix
+    else:  # Mono
+        outdata[:, 0] += grain_mix
+
 
 
 # Pre-fill the queue for smoother playback
