@@ -44,72 +44,39 @@ data = data.astype('float16')
 data_reverse = data[::-1].astype('float16')
 
 usb_device_index = 2
-grain_queue = queue.Queue(maxsize=100)  # Larger queue for better buffering
+grain_queue = queue.Queue(maxsize=50)  # Queue for storing pre-buffered grains
 stop_event = Event()
 lock = Lock()
 
-# Function for precise scheduling
-def precise_sleep(target_time):
-    current_time = time.perf_counter()
-    while current_time < target_time:
-        current_time = time.perf_counter()
-
-# Grain producer with improved scheduling
+# Function to generate and pre-buffer grains
 def grain_producer(grain_queue, stop_event):
-    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead
-    global playhead_speed, playhead_direction, mix, grain_pitch, random_pitch_variation
-    global envelope_type, apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size
-    global apply_random_grain_density, apply_random_position, random_grain_variation, random_grain_density_factor
-
     current_position = 0
-    last_time = time.perf_counter()
 
     while not stop_event.is_set():
-        start_time = time.perf_counter()
-
         grain_size_samples = ms_to_samples(grain_size_ms, fs)
 
-        with lock:
-            if apply_random_grain_density:
-                random_density_variation = 1 + (random_grain_density_factor / 100.0) * (np.random.random() - 0.5) * 2
-                effective_grain_density = max(min_grain_density, grain_density * random_density_variation)
-            else:
-                effective_grain_density = grain_density
-
-        interval = 1 / effective_grain_density
-
-        if apply_random_position:
-            effective_random_offset = int(random_offset * random_extent)
-            start_position = current_position + int(np.random.uniform(-effective_random_offset, effective_random_offset))
-        else:
-            start_position = current_position
-
-        start_position = np.clip(start_position, 0, len(data) - grain_size_samples)
-
+        # Generate grain outside of callback
         grain = generate_grain(
-            data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
+            data, data_reverse, current_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
             pitch=grain_pitch, pitch_variation=random_pitch_variation, apply_pitch=apply_pitch,
             envelope_enabled=envelope_enabled, apply_random_pitch=apply_random_pitch,
             apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
         )
 
         try:
-            grain_queue.put_nowait(grain)
+            grain_queue.put(grain, timeout=0.1)  # Timeout to prevent blocking
         except queue.Full:
-            pass
+            pass  # Skip adding this grain if queue is full
 
+        # Move playhead forward or backward if allowed
         if move_playhead:
-            current_position += int(fs // effective_grain_density) * playhead_speed * playhead_direction
-            current_position %= len(data)
+            current_position += int(fs // grain_density) * playhead_speed * playhead_direction
+            current_position %= len(data)  # Loop around if necessary
 
-        target_time = last_time + interval
-        precise_sleep(target_time)
-        last_time = target_time
+        # Sleep for the grain interval to match the grain density
+        time.sleep(1 / grain_density)
 
-# Audio Callback Function
-# List to keep track of currently active grains
-active_grains = []
-
+# Audio Callback Function for mixing pre-buffered grains
 def audio_callback(outdata, frames, time, status):
     if status:
         print(status)
@@ -117,51 +84,29 @@ def audio_callback(outdata, frames, time, status):
     # Clear the output buffer (silence)
     outdata.fill(0)
 
-    # Add new grains if available
+    # Fetch a grain from the queue and mix it into the output buffer
     try:
-        # Fetch a new grain from the queue
-        new_grain = grain_queue.get_nowait()
-        # Add the new grain to the active grains list
-        active_grains.append(new_grain)
-    except queue.Empty:
-        pass  # No new grain available
+        grain = grain_queue.get_nowait()
 
-    # Prepare a buffer to accumulate the grain data
-    grain_mix = np.zeros((frames,), dtype=np.float32)
-
-    # Process active grains and mix them into the grain_mix buffer
-    finished_grains = []
-    for i, grain in enumerate(active_grains):
         # Ensure grain is the correct length for the current buffer
         if len(grain) < frames:
             # Pad grain with zeros if it's shorter than the expected frame size
             padded_grain = np.zeros((frames,))
             padded_grain[:len(grain)] = grain
             grain = padded_grain
-            finished_grains.append(i)  # Mark grain as finished after this buffer
         elif len(grain) > frames:
             # Trim the grain if it's longer than the expected frame size
             grain = grain[:frames]
 
-        # Mix the grain into the grain_mix buffer
-        grain_mix += grain
+        # Mix the grain into the output buffer
+        if outdata.shape[1] == 2:  # Stereo
+            outdata[:, 0] += grain
+            outdata[:, 1] += grain
+        else:  # Mono
+            outdata[:, 0] += grain
 
-    # Remove finished grains from the active list
-    for i in reversed(finished_grains):
-        del active_grains[i]
-
-    # Normalize the grain mix to avoid overflow (prevent signal from exceeding [-1, 1])
-    if np.max(np.abs(grain_mix)) > 1.0:
-        grain_mix /= np.max(np.abs(grain_mix))
-
-    # Apply the mixed grain data to the output buffer
-    if outdata.shape[1] == 2:  # Stereo
-        outdata[:, 0] += grain_mix
-        outdata[:, 1] += grain_mix
-    else:  # Mono
-        outdata[:, 0] += grain_mix
-
-
+    except queue.Empty:
+        pass  # If the queue is empty, play silence
 
 # Pre-fill the queue for smoother playback
 def prefill_queue():
@@ -195,24 +140,9 @@ if __name__ == "__main__":
     with stream:
         print("Granular synthesis running. Press Ctrl+C to stop.")
 
-        # Continuously update parameters based on keyboard input
         try:
             while True:
-                (
-                    move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed, 
-                    mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
-                    envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, 
-                    apply_random_position
-                ) = handle_keyboard_input(
-                    True, grain_queue, move_playhead, playhead_direction, mix, 
-                    grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
-                    grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
-                    min_grain_size_ms, max_grain_density, min_grain_density,
-                    apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
-                    apply_random_grain_density, apply_random_position
-                )
-
-                sd.sleep(100)  # Sleep briefly to allow thread processing
+                sd.sleep(1000)  # Keep the main thread alive
         except KeyboardInterrupt:
             print("Stopping the granular synthesis.")
             stop_event.set()
