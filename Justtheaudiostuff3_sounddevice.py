@@ -131,6 +131,10 @@ def audio_callback(outdata, frames, time, status):
 # Keyboard input thread
 def keyboard_input_thread():
     global grain_size_ms, grain_density, playhead_speed, apply_pitch, envelope_enabled, mix
+    global move_playhead, playhead_direction, random_extent, random_grain_variation
+    global random_grain_density_factor, grain_pitch, apply_random_pitch, apply_random_grain_size
+    global apply_random_grain_density, apply_random_position
+
     while True:
         # Handle keyboard input and update the parameters
         updated_params = handle_keyboard_input(
@@ -152,6 +156,7 @@ def keyboard_input_thread():
             ) = updated_params
 
         time.sleep(0.1)  # Short sleep to avoid high CPU usage
+
 
 # Pre-fill the queue for smoother playback
 def prefill_queue():
