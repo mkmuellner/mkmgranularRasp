@@ -112,9 +112,28 @@ def audio_callback(outdata, frames, time, status):
         print(status)
     try:
         grain = grain_queue.get_nowait()
-        outdata[:frames] = grain[:frames].reshape(-1, 1)
+
+        # Ensure the grain has the correct number of frames
+        if len(grain) < frames:
+            # Pad the grain with zeros if it's too short
+            padded_grain = np.zeros((frames,))
+            padded_grain[:len(grain)] = grain
+            grain = padded_grain
+        elif len(grain) > frames:
+            # Truncate the grain if it's too long
+            grain = grain[:frames]
+
+        # Ensure the grain is reshaped to match the output shape
+        if outdata.shape[1] == 2:  # If the output is stereo
+            # Duplicate the mono grain data to both channels for stereo output
+            outdata[:] = np.column_stack((grain, grain))
+        else:
+            # Output the grain as mono
+            outdata[:, 0] = grain
+
     except queue.Empty:
-        outdata.fill(0)
+        outdata.fill(0)  # Output silence if no grains are available
+
 
 # Pre-fill the queue for smoother playback
 def prefill_queue():
