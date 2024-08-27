@@ -115,6 +115,35 @@ def audio_callback(outdata, frames, time, status):
     except queue.Empty:
         empty_queue_count += 1  # Increment the counter when the queue is empty
 
+# Keyboard input thread
+def keyboard_input_thread():
+    global grain_size_ms, grain_density, playhead_speed, apply_pitch, envelope_enabled, mix
+    global move_playhead, playhead_direction, random_extent, random_grain_variation
+    global random_grain_density_factor, grain_pitch, apply_random_pitch, apply_random_grain_size
+    global apply_random_grain_density, apply_random_position
+
+    while True:
+        # Handle keyboard input and update the parameters
+        updated_params = handle_keyboard_input(
+            True, grain_queue, move_playhead, playhead_direction, mix,
+            grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed,
+            grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
+            min_grain_size_ms, max_grain_density, min_grain_density,
+            apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size,
+            apply_random_grain_density, apply_random_position
+        )
+
+        # Unpack and update global variables with the returned values
+        if updated_params:
+            (
+                move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed,
+                mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
+                envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density,
+                apply_random_position
+            ) = updated_params
+
+        time.sleep(0.1)  # Short sleep to avoid high CPU usage
+
 # Pre-fill the queue for smoother playback
 def prefill_queue():
     print("Pre-filling grain queue...")
@@ -137,6 +166,14 @@ if __name__ == "__main__":
     producer_thread = Thread(target=grain_producer, args=(grain_queue, stop_event))
     producer_thread.daemon = True
     producer_thread.start()
+
+    # Start keyboard input thread
+    keyboard_thread = Thread(target=keyboard_input_thread)
+    keyboard_thread.daemon = True
+    keyboard_thread.start()
+
+    # Print key mappings at the start of the program
+    print_key_mappings()
 
     # Start audio stream
     stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms, fs), device=usb_device_index)
