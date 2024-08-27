@@ -151,7 +151,12 @@ if __name__ == "__main__":
         # Continuously update parameters based on keyboard input
         try:
             while True:
-                updated_params = handle_keyboard_input(
+                (
+                    move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed, 
+                    mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
+                    envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, 
+                    apply_random_position
+                ) = handle_keyboard_input(
                     True, grain_queue, move_playhead, playhead_direction, mix, 
                     grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
                     grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
@@ -160,13 +165,6 @@ if __name__ == "__main__":
                     apply_random_grain_density, apply_random_position
                 )
 
-                # Unpack and update global variables with the returned values
-                if updated_params:
-                    (
-                        apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size,
-                        apply_random_grain_density, apply_random_position
-                    ) = updated_params
-                
                 sd.sleep(100)  # Sleep briefly to allow thread processing
         except KeyboardInterrupt:
             print("Stopping the granular synthesis.")
