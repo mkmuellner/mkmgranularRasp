@@ -65,15 +65,20 @@ def handle_keyboard_input(
         if key == 'f':  # Move playhead forward once
             move_playhead = False
             playhead_direction = 1
+            print(f"Move playhead forward. Direction: {playhead_direction}")
         elif key == 'b':  # Move playhead backward once
             move_playhead = False
             playhead_direction = -1
+            print(f"Move playhead backward. Direction: {playhead_direction}")
         elif key == 'k':  # Keep moving playhead in current direction
             move_playhead = not move_playhead
+            print(f"Continuous playhead movement: {move_playhead}")
         elif key == 'u':  # Increase randomness around playhead
             random_extent += 0.1
+            print(f"Increased randomness around playhead. New extent: {random_extent}")
         elif key == 'i':  # Decrease randomness around playhead
             random_extent = max(0, random_extent - 0.1)
+            print(f"Decreased randomness around playhead. New extent: {random_extent}")
         elif key == 'y':  # Toggle pitch application
             apply_pitch = not apply_pitch
             print(f"Pitch Application: {apply_pitch}")
@@ -92,11 +97,47 @@ def handle_keyboard_input(
         elif key == 'z':  # Toggle random position variation
             apply_random_position = not apply_random_position
             print(f"Random Position Variation: {apply_random_position}")
+        elif key == '+':  # Increase grain size
+            grain_size_ms = min(grain_size_ms + 50, 2000)  # Arbitrary max grain size
+            print(f"Increased grain size to {grain_size_ms} ms")
+        elif key == '-':  # Decrease grain size
+            grain_size_ms = max(grain_size_ms - 50, min_grain_size_ms)
+            print(f"Decreased grain size to {grain_size_ms} ms")
+        elif key == 'p':  # Increase playhead speed
+            playhead_speed *= 1.1
+            print(f"Increased playhead speed to {playhead_speed}")
+        elif key == 'l':  # Decrease playhead speed
+            playhead_speed *= 0.9
+            print(f"Decreased playhead speed to {playhead_speed}")
+        elif key == 'm':  # Increase mix towards reversed grains
+            mix = min(mix + 0.1, 1.0)
+            print(f"Increased mix towards reversed grains: {mix}")
+        elif key == 'n':  # Increase mix towards normal grains
+            mix = max(mix - 0.1, 0.0)
+            print(f"Increased mix towards normal grains: {mix}")
+        elif key == 'g':  # Double grain density
+            grain_density = min(grain_density * 2, max_grain_density)
+            print(f"Doubled grain density: {grain_density}")
+        elif key == 'h':  # Halve grain density
+            grain_density = max(grain_density / 2, min_grain_density)
+            print(f"Halved grain density: {grain_density}")
+        elif key == 'r':  # Increase random grain density by 50%
+            random_grain_density_factor += 0.5
+            print(f"Increased random grain density factor to {random_grain_density_factor}")
+        elif key == 't':  # Decrease random grain density by 50%
+            random_grain_density_factor = max(0, random_grain_density_factor - 0.5)
+            print(f"Decreased random grain density factor to {random_grain_density_factor}")
+        elif key == 'z':  # Increase pitch by 10%
+            grain_pitch *= 1.1
+            print(f"Increased pitch to {grain_pitch}")
+        elif key == 'x':  # Decrease pitch by 10%
+            grain_pitch *= 0.9
+            print(f"Decreased pitch to {grain_pitch}")
 
-        # Clear the grain queue after significant changes
-        if key in {'+', '-', 'y', 't', 'r', 'g', 'd', 'z'}:
-            with grain_queue.mutex:
-                grain_queue.queue.clear()
-
-        # Return the updated boolean states
-        return apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, apply_random_position
+        # Return the updated values
+        return (
+            move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed, 
+            mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
+            envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density, 
+            apply_random_position
+        )
