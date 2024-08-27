@@ -54,7 +54,8 @@ def grain_producer(grain_queue, stop_event):
     previous_grains = []  # List to keep track of previous grains for recycling
 
     while not stop_event.is_set():
-        grain_batch = np.zeros(ms_to_samples(grain_size_ms, fs), dtype=np.float32)  # Buffer to accumulate mixed grains
+        # Buffer to accumulate mixed grains, always based on current grain_size_ms
+        grain_batch = np.zeros(ms_to_samples(grain_size_ms, fs), dtype=np.float32)
 
         num_grains = int(grain_density / (1000 / grain_size_ms))  # Calculate the number of grains to play in this batch
         for _ in range(num_grains):
@@ -77,7 +78,17 @@ def grain_producer(grain_queue, stop_event):
                 if len(previous_grains) > 50:  # Limit the number of recycled grains to prevent memory issues
                     previous_grains.pop(0)
 
-            # Mix the grain into the grain batch
+            # Resize the grain to match the grain_batch size
+            if len(grain) < len(grain_batch):
+                # Pad the grain with zeros if it's shorter
+                padded_grain = np.zeros(len(grain_batch))
+                padded_grain[:len(grain)] = grain
+                grain = padded_grain
+            elif len(grain) > len(grain_batch):
+                # Trim the grain if it's longer than the grain_batch
+                grain = grain[:len(grain_batch)]
+
+            # Mix the grain into the grain_batch
             grain_batch[:len(grain)] += grain
 
         # Normalize the batch to avoid clipping
@@ -96,6 +107,7 @@ def grain_producer(grain_queue, stop_event):
 
         # Sleep for a short time before producing the next batch
         time.sleep(1 / grain_density)
+
 
 # Audio Callback Function for processing the grain batches
 def audio_callback(outdata, frames, time, status):
