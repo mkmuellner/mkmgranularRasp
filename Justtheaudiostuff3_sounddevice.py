@@ -119,7 +119,7 @@ def audio_callback(outdata, frames, time, status):
 def keyboard_input_thread():
     global grain_size_ms, grain_density, playhead_speed, apply_pitch, envelope_enabled, mix
     global move_playhead, playhead_direction, random_extent, random_grain_variation
-    global random_grain_density_factor, grain_pitch, apply_random_pitch, apply_random_grain_size
+    global grain_pitch, random_pitch_variation, apply_random_pitch, apply_random_grain_size
     global apply_random_grain_density, apply_random_position
 
     while True:
@@ -127,7 +127,7 @@ def keyboard_input_thread():
         updated_params = handle_keyboard_input(
             True, grain_queue, move_playhead, playhead_direction, mix,
             grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed,
-            grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
+            grain_density, grain_pitch, random_pitch_variation,
             min_grain_size_ms, max_grain_density, min_grain_density,
             apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size,
             apply_random_grain_density, apply_random_position
@@ -137,7 +137,7 @@ def keyboard_input_thread():
         if updated_params:
             (
                 move_playhead, playhead_direction, random_extent, grain_size_ms, playhead_speed,
-                mix, grain_density, random_grain_density_factor, grain_pitch, apply_pitch,
+                mix, grain_density, grain_pitch, apply_pitch,
                 envelope_enabled, apply_random_pitch, apply_random_grain_size, apply_random_grain_density,
                 apply_random_position
             ) = updated_params
