@@ -14,27 +14,18 @@ def print_key_mappings():
     print("n: Increase mix towards normal grains")
     print("+: Increase grain size by 50 ms")
     print("-: Decrease grain size by 50 ms")
+    print("p: Increase playhead speed")
+    print("l: Decrease playhead speed")
     print("e: Change envelope type")
-    print("v: Increase random variation around grain size by 50%")
-    print("c: Decrease random variation around grain size by 50%")
-    print("p: Increase playhead speed by 10%")
-    print("l: Decrease playhead speed by 10%")
-    print("g: Double grain density")
-    print("h: Halve grain density")
-    print("r: Increase random grain density by 50%")
-    print("t: Decrease random grain density by 50%")
-    print("z: Increase pitch by 10%")
-    print("x: Decrease pitch by 10%")
-    print("q: Increase random pitch variation by 50%")
-    print("w: Decrease random pitch variation by 50%")
-
-    # New toggles for boolean controls
-    print("y: Toggle pitch application on/off")
-    print("t: Toggle envelope application on/off")
+    print("v: Increase random pitch variation by 0.1")
+    print("c: Decrease random pitch variation by 0.1")
     print("r: Toggle random pitch variation on/off")
     print("g: Toggle random grain size variation on/off")
     print("d: Toggle random grain density variation on/off")
     print("z: Toggle random position variation on/off")
+    print("y: Toggle pitch application on/off")
+    print("t: Toggle envelope application on/off")
+
 
 # Non-blocking input method using select
 def input_with_timeout(prompt, timeout=0.1):
