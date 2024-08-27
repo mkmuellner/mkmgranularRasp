@@ -107,32 +107,48 @@ def grain_producer(grain_queue, stop_event):
         last_time = target_time
 
 # Audio Callback Function
+# List to keep track of currently active grains
+active_grains = []
+
 def audio_callback(outdata, frames, time, status):
     if status:
         print(status)
-    try:
-        grain = grain_queue.get_nowait()
 
-        # Ensure the grain has the correct number of frames
+    # Clear the output buffer (silence)
+    outdata.fill(0)
+
+    # Add new grains if available
+    try:
+        # Fetch a new grain from the queue
+        new_grain = grain_queue.get_nowait()
+        # Add the new grain to the active grains list
+        active_grains.append(new_grain)
+    except queue.Empty:
+        pass  # No new grain available
+
+    # Process active grains and mix them into the output
+    finished_grains = []
+    for i, grain in enumerate(active_grains):
+        # Ensure grain is the correct length for the current buffer
         if len(grain) < frames:
-            # Pad the grain with zeros if it's too short
+            # Pad grain with zeros if it's shorter than the expected frame size
             padded_grain = np.zeros((frames,))
             padded_grain[:len(grain)] = grain
             grain = padded_grain
+            finished_grains.append(i)  # Mark grain as finished after this buffer
         elif len(grain) > frames:
-            # Truncate the grain if it's too long
+            # Trim the grain if it's longer than the expected frame size
             grain = grain[:frames]
 
-        # Ensure the grain is reshaped to match the output shape
-        if outdata.shape[1] == 2:  # If the output is stereo
-            # Duplicate the mono grain data to both channels for stereo output
-            outdata[:] = np.column_stack((grain, grain))
-        else:
-            # Output the grain as mono
-            outdata[:, 0] = grain
+        # Mix the grain into the output buffer
+        if outdata.shape[1] == 2:  # Stereo
+            outdata += np.column_stack((grain, grain))  # Add grain to both channels
+        else:  # Mono
+            outdata[:, 0] += grain
 
-    except queue.Empty:
-        outdata.fill(0)  # Output silence if no grains are available
+    # Remove finished grains from the active list
+    for i in reversed(finished_grains):
+        del active_grains[i]
 
 
 # Pre-fill the queue for smoother playback
