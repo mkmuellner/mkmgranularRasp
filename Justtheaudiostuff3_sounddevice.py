@@ -9,6 +9,7 @@ from audio_helpers import ms_to_samples, apply_envelope, generate_grain
 from input_helpers import print_key_mappings, handle_keyboard_input
 
 # Global variables
+empty_queue_count = 0  # Counts how many times the grain_queue was empty
 grain_size_ms = 200
 min_grain_size_ms = 50
 grain_density = 20  # Number of grains per second
@@ -108,9 +109,10 @@ def grain_producer(grain_queue, stop_event):
         # Sleep for a short time before producing the next batch
         time.sleep(1 / grain_density)
 
-
 # Audio Callback Function for processing the grain batches
 def audio_callback(outdata, frames, time, status):
+    global empty_queue_count
+
     if status:
         print(status)
 
@@ -138,7 +140,7 @@ def audio_callback(outdata, frames, time, status):
             outdata[:, 0] += grain_batch
 
     except queue.Empty:
-        pass  # If the queue is empty, play silence
+        empty_queue_count += 1  # Increment the counter when the queue is empty
 
 # Keyboard input thread
 def keyboard_input_thread():
@@ -168,7 +170,6 @@ def keyboard_input_thread():
             ) = updated_params
 
         time.sleep(0.1)  # Short sleep to avoid high CPU usage
-
 
 # Pre-fill the queue for smoother playback
 def prefill_queue():
@@ -211,6 +212,7 @@ if __name__ == "__main__":
             while True:
                 sd.sleep(1000)  # Keep the main thread alive
         except KeyboardInterrupt:
+            print(f"\nGrain queue was empty {empty_queue_count} times during execution.")
             print("Stopping the granular synthesis.")
             stop_event.set()
             producer_thread.join()
