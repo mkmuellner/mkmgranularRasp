@@ -56,6 +56,11 @@ def precise_sleep(target_time):
 
 # Grain producer with improved scheduling
 def grain_producer(grain_queue, stop_event):
+    global grain_size_ms, grain_density, random_offset, random_extent, move_playhead
+    global playhead_speed, playhead_direction, mix, grain_pitch, random_pitch_variation
+    global envelope_type, apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size
+    global apply_random_grain_density, apply_random_position, random_grain_variation, random_grain_density_factor
+
     current_position = 0
     last_time = time.perf_counter()
 
@@ -137,26 +142,33 @@ if __name__ == "__main__":
     # Print key mappings at the start of the program
     print_key_mappings()
 
-    # Start a thread for keyboard handling
-    keyboard_thread = Thread(target=handle_keyboard_input, args=(
-        True, grain_queue, move_playhead, playhead_direction, mix, 
-        grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
-        grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
-        min_grain_size_ms, max_grain_density, min_grain_density,
-        apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
-        apply_random_grain_density, apply_random_position
-    ))
-    keyboard_thread.daemon = True
-    keyboard_thread.start()
-
     # Start audio stream
     stream = sd.OutputStream(callback=audio_callback, samplerate=fs, blocksize=ms_to_samples(grain_size_ms, fs), device=usb_device_index)
 
     with stream:
         print("Granular synthesis running. Press Ctrl+C to stop.")
+
+        # Continuously update parameters based on keyboard input
         try:
             while True:
-                sd.sleep(1000)
+                updated_params = handle_keyboard_input(
+                    True, grain_queue, move_playhead, playhead_direction, mix, 
+                    grain_size_ms, envelope_type, random_extent, random_grain_variation, playhead_speed, 
+                    grain_density, random_grain_density_factor, grain_pitch, random_pitch_variation,
+                    min_grain_size_ms, max_grain_density, min_grain_density,
+                    apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size, 
+                    apply_random_grain_density, apply_random_position
+                )
+
+                # Unpack and update global variables with the returned values
+                if updated_params:
+                    (
+                        apply_pitch, envelope_enabled, apply_random_pitch, apply_random_grain_size,
+                        apply_random_grain_density, apply_random_position
+                    ) = updated_params
+                
+                sd.sleep(100)  # Sleep briefly to allow thread processing
         except KeyboardInterrupt:
+            print("Stopping the granular synthesis.")
             stop_event.set()
             producer_thread.join()
