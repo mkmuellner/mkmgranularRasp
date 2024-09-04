@@ -55,21 +55,17 @@ grain_queue = queue.Queue(maxsize=grains_queue)  # Queue for storing batches of 
 stop_event = Event()
 lock = Lock()
 
-# Function to generate grains and put them in the queue based on grain density
 def grain_producer(grain_queue, stop_event):
     current_position = 0
     previous_grains = []  # List to keep track of previous grains for recycling
-    grains_per_second = grain_density
-    grain_interval = 1.0 / grains_per_second  # Time between grains in seconds
+    grain_interval = 1.0 / (grain_density * 2)  # Shorter interval for more frequent grain production
 
     while not stop_event.is_set():
         # Generate a new grain
         grain_size_samples = ms_to_samples(grain_size_ms, fs)
         if random.random() < recycle_fraction and previous_grains:
-            # Recycle a previous grain
             grain = random.choice(previous_grains)
         else:
-            # Generate a new grain
             start_position = np.random.randint(0, len(data) - grain_size_samples)
             grain = generate_grain(
                 data, data_reverse, start_position, grain_size_samples, envelope_type=envelope_type, mix=mix,
@@ -78,21 +74,18 @@ def grain_producer(grain_queue, stop_event):
                 apply_random_grain_size=apply_random_grain_size, random_grain_variation=random_grain_variation
             )
 
-            # Keep track of previous grains for recycling
             previous_grains.append(grain)
-            if len(previous_grains) > grains_queue:  # Limit the number of recycled grains to prevent memory issues
+            if len(previous_grains) > grains_queue:
                 previous_grains.pop(0)
 
-        # Put the grain in the queue
         try:
             grain_queue.put(grain, timeout=0.1)
         except queue.Full:
-            pass  # Skip adding this grain if the queue is full
+            pass
 
-        # Sleep for the appropriate interval to maintain the grain density
-        time.sleep(grain_interval)
+        time.sleep(grain_interval)  # Reduced sleep interval
 
-# Audio Callback Function for processing the grains and ensuring playback at the correct rate
+
 def audio_callback(outdata, frames, time, status):
     global empty_queue_count
 
@@ -102,29 +95,30 @@ def audio_callback(outdata, frames, time, status):
     # Clear the output buffer (silence)
     outdata.fill(0)
 
+    # Try to mix multiple grains into the output buffer
     try:
-        # Fetch the next grain from the queue
-        grain = grain_queue.get_nowait()
+        # Fetch and mix multiple grains for overlap
+        for _ in range(3):  # Adjust this number based on desired overlap
+            grain = grain_queue.get_nowait()
 
-        # Ensure the grain is the correct length for the current buffer
-        if len(grain) < frames:
-            # Pad the grain with zeros if it's shorter than the expected frame size
-            padded_grain = np.zeros((frames,))
-            padded_grain[:len(grain)] = grain
-            grain = padded_grain
-        elif len(grain) > frames:
-            # Trim the grain if it's longer than the expected frame size
-            grain = grain[:frames]
+            # Ensure the grain is the correct length for the current buffer
+            if len(grain) < frames:
+                padded_grain = np.zeros((frames,))
+                padded_grain[:len(grain)] = grain
+                grain = padded_grain
+            elif len(grain) > frames:
+                grain = grain[:frames]
 
-        # Apply the mixed grain batch to the output buffer
-        if outdata.shape[1] == 2:  # Stereo
-            outdata[:, 0] += grain
-            outdata[:, 1] += grain
-        else:  # Mono
-            outdata[:, 0] += grain
+            # Apply the mixed grain batch to the output buffer
+            if outdata.shape[1] == 2:  # Stereo
+                outdata[:, 0] += grain
+                outdata[:, 1] += grain
+            else:  # Mono
+                outdata[:, 0] += grain
 
     except queue.Empty:
-        empty_queue_count += 1  # Increment the counter when the queue is empty
+        empty_queue_count += 1
+
 
 # Keyboard input thread
 def keyboard_input_thread():
