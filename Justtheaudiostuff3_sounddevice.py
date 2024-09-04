@@ -7,8 +7,6 @@ import time
 import random
 from audio_helpers import ms_to_samples, apply_envelope, generate_grain
 from input_helpers import print_key_mappings, handle_keyboard_input
-from scipy.signal import resample
-
 
 # Global variables
 empty_queue_count = 0  # Counts how many times the grain_queue was empty
@@ -42,12 +40,14 @@ data, fs = sf.read(filename, dtype='float32')
 if len(data.shape) > 1:
     data = np.mean(data, axis=1).astype('float32')
 
-# Resample to 22 kHz (new_fs = 22000)
-new_fs = 22000
-number_of_samples = int(len(data) * float(new_fs) / fs)
-data = resample(data, number_of_samples).astype('float16')
+# Audio settings
+filename = 'tori_amos_god_3.wav'
+data, fs = sf.read(filename, dtype='float32')
+if len(data.shape) > 1:
+    data = np.mean(data, axis=1).astype('float32')
+data = data.astype('float16')
 data_reverse = data[::-1].astype('float16')
-fs = new_fs  # Update the sample rate
+
 
 usb_device_index = 2
 grain_queue = queue.Queue(maxsize=50)  # Queue for storing batches of mixed grains
