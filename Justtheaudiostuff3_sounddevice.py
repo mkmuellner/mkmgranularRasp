@@ -31,7 +31,7 @@ envelope_enabled = True
 apply_random_pitch = True
 apply_random_grain_size = True
 apply_random_position = True
-
+keyboard_input = False
 
 # Audio settings
 filename = 'tori_amos_god_3.wav'
@@ -133,7 +133,7 @@ def keyboard_input_thread():
     global grain_pitch, random_pitch_variation, apply_random_pitch, apply_random_grain_size
     global apply_random_grain_density, apply_random_position
 
-    while True:
+    while keyboard_input:
         # Handle keyboard input and update the parameters
         updated_params = handle_keyboard_input(
             True, grain_queue, move_playhead, playhead_direction, mix,
