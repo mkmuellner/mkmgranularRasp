@@ -31,7 +31,7 @@ envelope_enabled = True
 apply_random_pitch = True
 apply_random_grain_size = True
 apply_random_position = True
-keyboard_input = False
+keyboard_input = True
 
 # Audio settings
 filename = 'tori_amos_god_3.wav'
