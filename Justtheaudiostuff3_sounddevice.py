@@ -10,7 +10,7 @@ from input_helpers import print_key_mappings, handle_keyboard_input
 
 # Global variables
 empty_queue_count = 0  # Counts how many times the grain_queue was empty
-grain_size_ms = 200
+grain_size_ms = 80
 grain_density = 20  # Number of grains per second
 random_offset = 500
 random_extent = 1.0
