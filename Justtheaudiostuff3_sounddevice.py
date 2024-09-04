@@ -79,7 +79,7 @@ def grain_producer(grain_queue, stop_event):
 
             # Keep track of previous grains for recycling
             previous_grains.append(grain)
-            if len(previous_grains) > 50:  # Limit the number of recycled grains to prevent memory issues
+            if len(previous_grains) > 30:  # Limit the number of recycled grains to prevent memory issues
                 previous_grains.pop(0)
 
         # Put the grain in the queue
