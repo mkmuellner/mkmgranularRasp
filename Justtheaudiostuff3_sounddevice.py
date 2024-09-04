@@ -23,6 +23,7 @@ envelope_type = 'soft'
 grain_pitch = 1.0
 random_pitch_variation = 0
 recycle_fraction = 0.5  # Fraction of grains that can be recycled
+grains_queue = 30
 
 # Binary variables
 apply_pitch = True
@@ -50,7 +51,7 @@ data_reverse = data[::-1].astype('float16')
 
 
 usb_device_index = 2
-grain_queue = queue.Queue(maxsize=50)  # Queue for storing batches of mixed grains
+grain_queue = queue.Queue(maxsize=grains_queue)  # Queue for storing batches of mixed grains
 stop_event = Event()
 lock = Lock()
 
@@ -79,7 +80,7 @@ def grain_producer(grain_queue, stop_event):
 
             # Keep track of previous grains for recycling
             previous_grains.append(grain)
-            if len(previous_grains) > 30:  # Limit the number of recycled grains to prevent memory issues
+            if len(previous_grains) > grains_queue:  # Limit the number of recycled grains to prevent memory issues
                 previous_grains.pop(0)
 
         # Put the grain in the queue
